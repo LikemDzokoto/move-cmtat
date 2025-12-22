@@ -1,12 +1,12 @@
 # Move CMTAT - Capital Markets Technology Association Token Standard
 
-> A Move implementation of Switzerland's Capital Markets Technology Association token standard for IOTA/Sui
+> A Move implementation of Switzerland's Capital Markets Technology Association token standard for IOTA
 
 **⚠️ This project has not undergone an audit and is provided as-is without any warranties.**
 
 ## Overview
 
-[CMTAT](https://cmta.ch/standards/cmta-token-cmtat) is a framework for the tokenization of securities and other financial instruments in compliance with local regulations. This project implements CMTAT in Move, enabling financial institutions to adopt the standard on Move-based blockchains like IOTA and Sui.
+[CMTAT](https://cmta.ch/standards/cmta-token-cmtat) is a framework for the tokenization of securities and other financial instruments in compliance with local regulations. This project implements CMTAT in Move, enabling financial institutions to adopt the standard on the IOTA blockchain.
 
 This implementation is based on the [Cairo CMTAT version](https://github.com/0xsereel/cairo-cmtat) and the original [Solidity CMTAT](https://github.com/CMTA/CMTAT).
 
@@ -25,19 +25,19 @@ This implementation is based on the [Cairo CMTAT version](https://github.com/0xs
 ### Prerequisites
 
 - Move CLI installed
-- IOTA/Sui wallet configured
+- IOTA wallet configured
 
 ### Build & Test
 
 ```bash
 # Build all contracts
-sui move build
+iota move build
 
 # Run tests
-sui move test
+iota move test
 
 # Run specific test
-sui move test --filter test_name
+iota move test --filter test_name
 ```
 
 ### Deploy
@@ -206,7 +206,7 @@ Mozilla Public License 2.0 (MPL-2.0)
 - **Cairo CMTAT**: https://github.com/0xsereel/cairo-cmtat
 - **CMTAT Solidity**: https://github.com/CMTA/CMTAT
 - **IOTA**: https://www.iota.org
-- **Sui Move**: https://docs.sui.io
+- **IOTA Move**: https://docs.iota.org
 
 ---
 

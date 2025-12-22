@@ -1,9 +1,9 @@
 /// Allowlist Component - KYC/AML Compliance
 /// Manages approved addresses for token transfers
 module move_cmtat::allowlist {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::table::{Self, Table};
+    use iota::object::{Self, UID};
+    use iota::tx_context::TxContext;
+    use iota::table::{Self, Table};
 
     /// Errors
     const ENotAllowlisted: u64 = 300;

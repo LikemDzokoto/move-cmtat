@@ -1,8 +1,8 @@
 /// Pause Component - Pause/Unpause/Deactivate Functionality
 /// Provides circuit breaker mechanism for emergency stops
 module move_cmtat::pause {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
+    use iota::object::{Self, UID};
+    use iota::tx_context::TxContext;
 
     /// Errors
     const EPaused: u64 = 100;

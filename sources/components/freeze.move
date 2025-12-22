@@ -1,9 +1,9 @@
 /// Freeze Component - Address Freezing and Partial Token Freezing
 /// Allows enforcement of regulatory compliance by freezing addresses
 module move_cmtat::freeze {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::table::{Self, Table};
+    use iota::object::{Self, UID};
+    use iota::tx_context::TxContext;
+    use iota::table::{Self, Table};
 
     /// Errors
     const EFrozenAddress: u64 = 200;

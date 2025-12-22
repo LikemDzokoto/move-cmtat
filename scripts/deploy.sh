@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy script for Move CMTAT on IOTA/Sui
+# Deploy script for Move CMTAT on IOTA
 
 set -e
 
@@ -8,7 +8,7 @@ echo "=================================="
 
 # Build the project
 echo "📦 Building Move CMTAT..."
-sui move build
+iota move build
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed!"
@@ -24,7 +24,7 @@ echo "Note: Make sure your wallet is configured and funded"
 echo ""
 
 # Publish the package
-sui client publish --gas-budget 100000000
+iota client publish --gas-budget 100000000
 
 echo ""
 echo "=================================="
@@ -36,6 +36,6 @@ echo "2. Initialize tokens using the init_token function"
 echo "3. Grant roles as needed"
 echo ""
 echo "Example initialization:"
-echo "sui client call --package <PACKAGE_ID> --module light_cmtat --function init_token \\"
+echo "iota client call --package <PACKAGE_ID> --module light_cmtat --function init_token \\"
 echo "  --args '<name>' '<symbol>' <decimals> <initial_supply> '<recipient>' \\"
 echo "  --gas-budget 10000000"

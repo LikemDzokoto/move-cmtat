@@ -1,7 +1,7 @@
 #[test_only]
 module move_cmtat::light_cmtat_tests {
     use std::string;
-    use sui::test_scenario::{Self, Scenario};
+    use iota::test_scenario::{Self, Scenario};
     use move_cmtat::light_cmtat::{Self, LightCMTAT, AdminCap};
 
     const ADMIN: address = @0xAD;

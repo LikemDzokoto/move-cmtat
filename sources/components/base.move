@@ -2,12 +2,12 @@
 /// Provides the foundational token operations for all CMTAT variants
 module move_cmtat::base {
     use std::string::String;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-    use sui::coin::{Self, Coin, TreasuryCap};
-    use sui::balance::{Self, Balance};
-    use sui::table::{Self, Table};
+    use iota::object::{Self, UID};
+    use iota::tx_context::{Self, TxContext};
+    use iota::transfer;
+    use iota::coin::{Self, Coin, TreasuryCap};
+    use iota::balance::{Self, Balance};
+    use iota::table::{Self, Table};
 
     /// Errors
     const EInsufficientBalance: u64 = 0;

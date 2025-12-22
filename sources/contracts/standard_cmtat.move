@@ -1,31 +1,39 @@
-/// Light CMTAT - Minimal CMTAT Implementation
-/// Basic compliance features with 4 roles
-/// Suitable for standard token deployments with simple regulatory requirements
-module move_cmtat::light_cmtat {
+/// Standard CMTAT - Full Feature Set with Transfer Validation
+/// Implements ERC-1404 compliance with transfer restriction codes
+/// 9 roles for comprehensive access control
+module move_cmtat::standard_cmtat {
     use std::string::String;
     use iota::object::{Self, UID};
     use iota::tx_context::{Self, TxContext};
     use iota::transfer;
     use iota::table::{Self, Table};
+    use iota::clock::{Self, Clock};
     
     use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
+    use move_cmtat::validation;
+    use move_cmtat::rule_engine;
+    use move_cmtat::snapshot_engine;
     use move_cmtat::icmtat;
 
     /// Errors
-    const EUnauthorized: u64 = 1000;
-    const EInsufficientBalance: u64 = 1001;
-    const EInvalidAmount: u64 = 1002;
+    const EUnauthorized: u64 = 4000;
+    const EInsufficientBalance: u64 = 4001;
+    const EInvalidAmount: u64 = 4002;
+    const ETransferRestricted: u64 = 4003;
 
-    /// Light CMTAT Token
-    public struct LightCMTAT has key, store {
+    /// Standard CMTAT Token
+    public struct StandardCMTAT has key, store {
         id: UID,
         token_info: base::TokenInfo,
         balances: base::Balances,
         pause_state: pause::PauseState,
         freeze_state: freeze::FreezeState,
+        rule_engine: rule_engine::RuleEngine,
+        snapshot_engine: snapshot_engine::SnapshotEngine,
         roles: Table<address, vector<vector<u8>>>,  // address -> list of roles
+        document_uri: String,
     }
 
     /// Admin capability
@@ -33,7 +41,7 @@ module move_cmtat::light_cmtat {
         id: UID,
     }
 
-    /// Initialize Light CMTAT
+    /// Initialize Standard CMTAT
     public entry fun init_token(
         name: String,
         symbol: String,
@@ -42,13 +50,16 @@ module move_cmtat::light_cmtat {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let token = LightCMTAT {
+        let token = StandardCMTAT {
             id: object::new(ctx),
             token_info: base::init_token_info(name, symbol, decimals, ctx),
             balances: base::init_balances(ctx),
             pause_state: pause::init_pause_state(ctx),
             freeze_state: freeze::init_freeze_state(ctx),
+            rule_engine: rule_engine::init_rule_engine(ctx),
+            snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
             roles: table::new(ctx),
+            document_uri: std::string::utf8(b""),
         };
 
         // Mint initial supply to recipient
@@ -57,12 +68,16 @@ module move_cmtat::light_cmtat {
             base::increase_total_supply(&mut token.token_info, initial_supply);
         };
 
-        // Grant admin role to sender
+        // Grant all roles to admin (9 roles for standard CMTAT)
         let admin = tx_context::sender(ctx);
         grant_role_internal(&mut token, admin, icmtat::default_admin_role());
         grant_role_internal(&mut token, admin, icmtat::minter_role());
         grant_role_internal(&mut token, admin, icmtat::pauser_role());
         grant_role_internal(&mut token, admin, icmtat::enforcer_role());
+        grant_role_internal(&mut token, admin, icmtat::erc20enforcer_role());
+        grant_role_internal(&mut token, admin, icmtat::snapshooter_role());
+        grant_role_internal(&mut token, admin, icmtat::document_role());
+        grant_role_internal(&mut token, admin, icmtat::extra_information_role());
 
         // Create and transfer admin capability
         let admin_cap = AdminCap {
@@ -75,8 +90,7 @@ module move_cmtat::light_cmtat {
 
     // ============ Role Management ============
 
-    /// Internal role grant
-    fun grant_role_internal(token: &mut LightCMTAT, account: address, role: vector<u8>) {
+    fun grant_role_internal(token: &mut StandardCMTAT, account: address, role: vector<u8>) {
         if (!table::contains(&token.roles, account)) {
             table::add(&mut token.roles, account, vector::empty());
         };
@@ -84,8 +98,7 @@ module move_cmtat::light_cmtat {
         vector::push_back(roles, role);
     }
 
-    /// Check if account has role
-    fun has_role(token: &LightCMTAT, account: address, role: vector<u8>): bool {
+    fun has_role(token: &StandardCMTAT, account: address, role: vector<u8>): bool {
         if (!table::contains(&token.roles, account)) {
             return false
         };
@@ -93,112 +106,118 @@ module move_cmtat::light_cmtat {
         vector::contains(roles, &role)
     }
 
-    /// Require role
-    fun require_role(token: &LightCMTAT, account: address, role: vector<u8>) {
+    fun require_role(token: &StandardCMTAT, account: address, role: vector<u8>) {
         assert!(has_role(token, account, role), EUnauthorized);
     }
 
     // ============ View Functions ============
 
-    public fun name(token: &LightCMTAT): String {
+    public fun name(token: &StandardCMTAT): String {
         base::name(&token.token_info)
     }
 
-    public fun symbol(token: &LightCMTAT): String {
+    public fun symbol(token: &StandardCMTAT): String {
         base::symbol(&token.token_info)
     }
 
-    public fun decimals(token: &LightCMTAT): u8 {
+    public fun decimals(token: &StandardCMTAT): u8 {
         base::decimals(&token.token_info)
     }
 
-    public fun total_supply(token: &LightCMTAT): u64 {
+    public fun total_supply(token: &StandardCMTAT): u64 {
         base::total_supply(&token.token_info)
     }
 
-    public fun balance_of(token: &LightCMTAT, account: address): u64 {
+    public fun balance_of(token: &StandardCMTAT, account: address): u64 {
         base::balance_of(&token.balances, account)
     }
 
-    public fun batch_balance_of(token: &LightCMTAT, accounts: vector<address>): vector<u64> {
-        base::batch_balance_of(&token.balances, accounts)
+    public fun get_active_balance_of(token: &StandardCMTAT, account: address): u64 {
+        let total_balance = base::balance_of(&token.balances, account);
+        freeze::get_active_balance(total_balance, &token.freeze_state, account)
     }
 
-    public fun terms(token: &LightCMTAT): String {
-        base::terms(&token.token_info)
-    }
-
-    public fun information(token: &LightCMTAT): String {
-        base::information(&token.token_info)
-    }
-
-    public fun token_id(token: &LightCMTAT): String {
-        base::token_id(&token.token_info)
-    }
-
-    public fun paused(token: &LightCMTAT): bool {
+    public fun paused(token: &StandardCMTAT): bool {
         pause::is_paused(&token.pause_state)
     }
 
-    public fun deactivated(token: &LightCMTAT): bool {
-        pause::is_deactivated(&token.pause_state)
-    }
-
-    public fun is_frozen(token: &LightCMTAT, account: address): bool {
+    public fun is_frozen(token: &StandardCMTAT, account: address): bool {
         freeze::is_frozen(&token.freeze_state, account)
     }
 
-    // ============ Role Getters (matching Cairo ABI) ============
-
-    public fun get_default_admin_role(): vector<u8> {
-        icmtat::default_admin_role()
+    public fun document_uri(token: &StandardCMTAT): String {
+        token.document_uri
     }
 
-    public fun get_minter_role(): vector<u8> {
-        icmtat::minter_role()
+    // ============ ERC-1404 Transfer Validation ============
+
+    /// Get restriction code for a potential transfer
+    /// Returns 0 if transfer is allowed, >0 if restricted
+    public fun detect_transfer_restriction(
+        token: &StandardCMTAT,
+        from: address,
+        to: address,
+        amount: u64
+    ): u8 {
+        let from_balance = base::balance_of(&token.balances, from);
+        
+        rule_engine::validate_transfer(
+            &token.pause_state,
+            &token.freeze_state,
+            from,
+            to,
+            amount,
+            from_balance
+        )
     }
 
-    public fun get_pauser_role(): vector<u8> {
-        icmtat::pauser_role()
-    }
-
-    public fun get_enforcer_role(): vector<u8> {
-        icmtat::enforcer_role()
+    /// Get human-readable message for restriction code
+    public fun message_for_transfer_restriction(code: u8): String {
+        validation::get_restriction_message(code)
     }
 
     // ============ Administrative Functions ============
 
     public entry fun set_terms(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         new_terms: String,
         ctx: &TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
+        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
         base::set_terms(&mut token.token_info, new_terms);
     }
 
     public entry fun set_information(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         new_info: String,
         ctx: &TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
+        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
         base::set_information(&mut token.token_info, new_info);
     }
 
     public entry fun set_token_id(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         new_id: String,
         ctx: &TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
+        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
         base::set_token_id(&mut token.token_info, new_id);
+    }
+
+    public entry fun set_document_uri(
+        token: &mut StandardCMTAT,
+        uri: String,
+        ctx: &TxContext
+    ) {
+        require_role(token, tx_context::sender(ctx), icmtat::document_role());
+        token.document_uri = uri;
     }
 
     // ============ Minting Functions ============
 
     public entry fun mint(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         to: address,
         amount: u64,
         ctx: &TxContext
@@ -213,7 +232,7 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun batch_mint(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         recipients: vector<address>,
         amounts: vector<u64>,
         ctx: &TxContext
@@ -230,6 +249,7 @@ module move_cmtat::light_cmtat {
             let amount = *vector::borrow(&amounts, i);
             
             freeze::require_not_frozen(&token.freeze_state, recipient);
+            
             let current_balance = base::balance_of(&token.balances, recipient);
             base::update_balance(&mut token.balances, recipient, current_balance + amount);
             base::increase_total_supply(&mut token.token_info, amount);
@@ -241,7 +261,7 @@ module move_cmtat::light_cmtat {
     // ============ Burning Functions ============
 
     public entry fun burn(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         amount: u64,
         ctx: &TxContext
     ) {
@@ -256,7 +276,7 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun burn_from(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         from: address,
         amount: u64,
         ctx: &TxContext
@@ -269,74 +289,12 @@ module move_cmtat::light_cmtat {
         
         base::update_balance(&mut token.balances, from, balance - amount);
         base::decrease_total_supply(&mut token.token_info, amount);
-    }
-
-    public entry fun batch_burn(
-        token: &mut LightCMTAT,
-        accounts: vector<address>,
-        amounts: vector<u64>,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        
-        let i = 0;
-        let len = vector::length(&accounts);
-        assert!(len == vector::length(&amounts), EInvalidAmount);
-        
-        while (i < len) {
-            let account = *vector::borrow(&accounts, i);
-            let amount = *vector::borrow(&amounts, i);
-            
-            let balance = base::balance_of(&token.balances, account);
-            assert!(balance >= amount, EInsufficientBalance);
-            
-            base::update_balance(&mut token.balances, account, balance - amount);
-            base::decrease_total_supply(&mut token.token_info, amount);
-            
-            i = i + 1;
-        }
-    }
-
-    public entry fun forced_burn(
-        token: &mut LightCMTAT,
-        from: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-
-        let balance = base::balance_of(&token.balances, from);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
-
-    public entry fun burn_and_mint(
-        token: &mut LightCMTAT,
-        from: address,
-        to: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, to);
-        
-        let from_balance = base::balance_of(&token.balances, from);
-        assert!(from_balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, from_balance - amount);
-        
-        let to_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, to_balance + amount);
     }
 
     // ============ Pause Functions ============
 
     public entry fun pause(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         ctx: &TxContext
     ) {
         require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
@@ -344,25 +302,17 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun unpause(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         ctx: &TxContext
     ) {
         require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
         pause::unpause(&mut token.pause_state);
     }
 
-    public entry fun deactivate_contract(
-        token: &mut LightCMTAT,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
-        pause::deactivate(&mut token.pause_state);
-    }
-
     // ============ Freeze Functions ============
 
     public entry fun set_address_frozen(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         account: address,
         frozen: bool,
         ctx: &TxContext
@@ -371,35 +321,98 @@ module move_cmtat::light_cmtat {
         freeze::set_address_frozen(&mut token.freeze_state, account, frozen);
     }
 
-    public entry fun batch_set_address_frozen(
-        token: &mut LightCMTAT,
-        accounts: vector<address>,
-        statuses: vector<bool>,
+    public entry fun freeze_partial_tokens(
+        token: &mut StandardCMTAT,
+        account: address,
+        amount: u64,
         ctx: &TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        freeze::batch_set_address_frozen(&mut token.freeze_state, accounts, statuses);
+        require_role(token, tx_context::sender(ctx), icmtat::erc20enforcer_role());
+        freeze::freeze_partial_tokens(&mut token.freeze_state, account, amount);
     }
 
-    // ============ Transfer Functions ============
+    public entry fun unfreeze_partial_tokens(
+        token: &mut StandardCMTAT,
+        account: address,
+        amount: u64,
+        ctx: &TxContext
+    ) {
+        require_role(token, tx_context::sender(ctx), icmtat::erc20enforcer_role());
+        freeze::unfreeze_partial_tokens(&mut token.freeze_state, account, amount);
+    }
+
+    // ============ Snapshot Functions ============
+
+    public entry fun schedule_snapshot(
+        token: &mut StandardCMTAT,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        require_role(token, tx_context::sender(ctx), icmtat::snapshooter_role());
+        
+        let timestamp = clock::timestamp_ms(clock);
+        let total_supply = base::total_supply(&token.token_info);
+        
+        snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
+    }
+
+    // ============ Transfer Functions with Validation ============
 
     public entry fun transfer(
-        token: &mut LightCMTAT,
+        token: &mut StandardCMTAT,
         to: address,
         amount: u64,
         ctx: &TxContext
     ) {
         let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, sender);
-        freeze::require_not_frozen(&token.freeze_state, to);
-
-        let sender_balance = base::balance_of(&token.balances, sender);
-        assert!(sender_balance >= amount, EInsufficientBalance);
         
+        // Validate transfer using rule engine
+        let sender_balance = base::balance_of(&token.balances, sender);
+        let restriction_code = rule_engine::validate_transfer(
+            &token.pause_state,
+            &token.freeze_state,
+            sender,
+            to,
+            amount,
+            sender_balance
+        );
+        
+        // Require valid transfer
+        rule_engine::require_valid_transfer(restriction_code);
+        
+        // Execute transfer
         base::update_balance(&mut token.balances, sender, sender_balance - amount);
         
         let to_balance = base::balance_of(&token.balances, to);
         base::update_balance(&mut token.balances, to, to_balance + amount);
+    }
+
+    /// Transfer with explicit validation check
+    /// Returns restriction code instead of reverting
+    public fun transfer_with_validation(
+        token: &mut StandardCMTAT,
+        to: address,
+        amount: u64,
+        ctx: &TxContext
+    ): u8 {
+        let sender = tx_context::sender(ctx);
+        let sender_balance = base::balance_of(&token.balances, sender);
+        
+        let restriction_code = rule_engine::validate_transfer(
+            &token.pause_state,
+            &token.freeze_state,
+            sender,
+            to,
+            amount,
+            sender_balance
+        );
+        
+        if (restriction_code == icmtat::restriction_code_valid()) {
+            base::update_balance(&mut token.balances, sender, sender_balance - amount);
+            let to_balance = base::balance_of(&token.balances, to);
+            base::update_balance(&mut token.balances, to, to_balance + amount);
+        };
+        
+        restriction_code
     }
 }
