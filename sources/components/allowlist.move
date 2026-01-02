@@ -58,23 +58,7 @@ module move_cmtat::allowlist {
         }
     }
 
-    /// Batch set addresses allowlist
-    public fun batch_set_address_allowlist(
-        state: &mut AllowlistState,
-        accounts: vector<address>,
-        statuses: vector<bool>
-    ) {
-        let i = 0;
-        let len = vector::length(&accounts);
-        assert!(len == vector::length(&statuses), 0);
-        
-        while (i < len) {
-            let account = *vector::borrow(&accounts, i);
-            let status = *vector::borrow(&statuses, i);
-            set_address_allowlist(state, account, status);
-            i = i + 1;
-        }
-    }
+
 
     /// Require address to be allowlisted
     public fun require_allowlisted(state: &AllowlistState, account: address) {

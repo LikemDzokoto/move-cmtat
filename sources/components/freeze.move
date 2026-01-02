@@ -44,23 +44,7 @@ module move_cmtat::freeze {
         }
     }
 
-    /// Batch set addresses frozen
-    public fun batch_set_address_frozen(
-        state: &mut FreezeState,
-        accounts: vector<address>,
-        statuses: vector<bool>
-    ) {
-        let i = 0;
-        let len = vector::length(&accounts);
-        assert!(len == vector::length(&statuses), 0);
-        
-        while (i < len) {
-            let account = *vector::borrow(&accounts, i);
-            let status = *vector::borrow(&statuses, i);
-            set_address_frozen(state, account, status);
-            i = i + 1;
-        }
-    }
+
 
     /// Get frozen token amount for address
     public fun get_frozen_amount(state: &FreezeState, account: address): u64 {

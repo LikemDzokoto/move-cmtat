@@ -99,7 +99,7 @@ module move_cmtat::light_cmtat {
 
         // Transfer initial coins to recipient (if any)
         if (initial_supply > 0) {
-            transfer::transfer(initial_coins, recipient);
+            transfer::public_transfer(initial_coins, recipient);
         } else {
             // Destroy zero coin
             base::destroy_zero_coin(initial_coins);
@@ -223,33 +223,7 @@ module move_cmtat::light_cmtat {
 
         let coins = base::mint(&mut token.treasury_cap, amount, ctx);
         base::transfer_coin(coins, to);
-    }
-
-    public entry fun batch_mint(
-        mint_cap: &MintCap,
-        token: &mut LightCMTAT,
-        compliance_state: &ComplianceState,
-        recipients: vector<address>,
-        amounts: vector<u64>,
-        ctx: &mut TxContext
-    ) {
-        pause::require_not_paused(&compliance_state.pause_state);
-
-        let i = 0;
-        let len = vector::length(&recipients);
-        assert!(len == vector::length(&amounts), EInvalidAmount);
-
-        while (i < len) {
-            let recipient = *vector::borrow(&recipients, i);
-            let amount = *vector::borrow(&amounts, i);
-
-            freeze::require_not_frozen(&compliance_state.freeze_state, recipient);
-            let coins = base::mint(&mut token.treasury_cap, amount, ctx);
-            base::transfer_coin(coins, recipient);
-
-            i = i + 1;
-        }
-    }
+     }
 
     // ============ Burning Functions ============
 
@@ -303,16 +277,7 @@ module move_cmtat::light_cmtat {
         frozen: bool
     ) {
         freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
-    }
-
-    public entry fun batch_set_address_frozen(
-        _freeze_cap: &FreezeCap,
-        compliance_state: &mut ComplianceState,
-        accounts: vector<address>,
-        statuses: vector<bool>
-    ) {
-        freeze::batch_set_address_frozen(&mut compliance_state.freeze_state, accounts, statuses);
-    }
+     }
 
     // ============ Transfer Functions ============
 

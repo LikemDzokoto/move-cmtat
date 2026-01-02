@@ -3,11 +3,11 @@
 /// Implements 10 roles including DEBT_ROLE
 module move_cmtat::debt_cmtat {
     use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::transfer;
-    use iota::table::{Self, Table};
-    use iota::clock::{Self, Clock};
+     use iota::object::{Self, UID};
+     use iota::tx_context::{Self, TxContext};
+     use iota::transfer;
+     use iota::coin::{Self, Coin, TreasuryCap};
+     use iota::clock::{Self, Clock};
     
     use move_cmtat::base;
     use move_cmtat::pause;
@@ -48,7 +48,8 @@ module move_cmtat::debt_cmtat {
     public struct SnapshotCap has key, store { id: UID }
     public struct DebtCap has key, store { id: UID }
 
-    /// Initialize Debt CMTAT
+    /// Initialize Debt CMTAT with native IOTA token architecture
+    /// Creates TreasuryCap<CMTAT>, mints initial supply, and distributes capabilities
     public entry fun init_token(
         name: String,
         symbol: String,
@@ -57,66 +58,72 @@ module move_cmtat::debt_cmtat {
         recipient: address,
         ctx: &mut TxContext
     ) {
+        // Create token metadata
+        let token_info = base::init_token_info(name, symbol, decimals, ctx);
+
+        // Create treasury cap for mint/burn authority
+        let treasury_cap = base::create_treasury_cap(ctx);
+
+        // Mint initial supply if specified
+        let initial_coins = if (initial_supply > 0) {
+            base::mint(&mut treasury_cap, initial_supply, ctx)
+        } else {
+            coin::zero<base::CMTAT>(ctx)
+        };
+
+        // Create token object
         let token = DebtCMTAT {
             id: object::new(ctx),
-            token_info: base::init_token_info(name, symbol, decimals, ctx),
-            balances: base::init_balances(ctx),
-            pause_state: pause::init_pause_state(ctx),
-            freeze_state: freeze::init_freeze_state(ctx),
-            debt_state: debt::init_debt_state(ctx),
+            token_info,
+            treasury_cap,
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
-            roles: table::new(ctx),
             document_uri: std::string::utf8(b""),
         };
 
-        // Mint initial supply to recipient
-        if (initial_supply > 0) {
-            base::update_balance(&mut token.balances, recipient, initial_supply);
-            base::increase_total_supply(&mut token.token_info, initial_supply);
-        };
-
-        // Grant all roles to admin (10 roles for debt CMTAT)
-        let admin = tx_context::sender(ctx);
-        grant_role_internal(&mut token, admin, icmtat::default_admin_role());
-        grant_role_internal(&mut token, admin, icmtat::minter_role());
-        grant_role_internal(&mut token, admin, icmtat::pauser_role());
-        grant_role_internal(&mut token, admin, icmtat::enforcer_role());
-        grant_role_internal(&mut token, admin, icmtat::erc20enforcer_role());
-        grant_role_internal(&mut token, admin, icmtat::snapshooter_role());
-        grant_role_internal(&mut token, admin, icmtat::document_role());
-        grant_role_internal(&mut token, admin, icmtat::extra_information_role());
-        grant_role_internal(&mut token, admin, icmtat::debt_role());
-
-        // Create and transfer admin capability
-        let admin_cap = AdminCap {
+        // Create compliance state
+        let compliance_state = ComplianceState {
             id: object::new(ctx),
+            pause_state: pause::init_pause_state(ctx),
+            freeze_state: freeze::init_freeze_state(ctx),
+            debt_state: debt::init_debt_state(ctx),
         };
 
+        // Create capability objects
+        let admin = tx_context::sender(ctx);
+        let admin_cap = AdminCap { id: object::new(ctx) };
+        let mint_cap = MintCap { id: object::new(ctx) };
+        let burn_cap = BurnCap { id: object::new(ctx) };
+        let freeze_cap = FreezeCap { id: object::new(ctx) };
+        let pause_cap = PauseCap { id: object::new(ctx) };
+        let snapshot_cap = SnapshotCap { id: object::new(ctx) };
+        let debt_cap = DebtCap { id: object::new(ctx) };
+
+        // Share objects
         transfer::share_object(token);
+        transfer::share_object(compliance_state);
+
+        // Transfer capabilities to admin
         transfer::transfer(admin_cap, admin);
+        transfer::transfer(mint_cap, admin);
+        transfer::transfer(burn_cap, admin);
+        transfer::transfer(freeze_cap, admin);
+        transfer::transfer(pause_cap, admin);
+        transfer::transfer(snapshot_cap, admin);
+        transfer::transfer(debt_cap, admin);
+
+        // Transfer initial coins to recipient (if any)
+        if (initial_supply > 0) {
+            transfer::public_transfer(initial_coins, recipient);
+        } else {
+            // Destroy zero coin
+            base::destroy_zero_coin(initial_coins);
+        }
     }
 
-    // ============ Role Management ============
+     // ============ Capability-Based Access Control ============
 
-    fun grant_role_internal(token: &mut DebtCMTAT, account: address, role: vector<u8>) {
-        if (!table::contains(&token.roles, account)) {
-            table::add(&mut token.roles, account, vector::empty());
-        };
-        let roles = table::borrow_mut(&mut token.roles, account);
-        vector::push_back(roles, role);
-    }
-
-    fun has_role(token: &DebtCMTAT, account: address, role: vector<u8>): bool {
-        if (!table::contains(&token.roles, account)) {
-            return false
-        };
-        let roles = table::borrow(&token.roles, account);
-        vector::contains(roles, &role)
-    }
-
-    fun require_role(token: &DebtCMTAT, account: address, role: vector<u8>) {
-        assert!(has_role(token, account, role), EUnauthorized);
-    }
+     /// Note: Access control is now enforced by function signatures requiring capability objects
+     /// No role tables needed - capabilities are transferable objects that grant authority
 
     // ============ View Functions ============
 
@@ -132,42 +139,37 @@ module move_cmtat::debt_cmtat {
         base::decimals(&token.token_info)
     }
 
-    public fun total_supply(token: &DebtCMTAT): u64 {
-        base::total_supply(&token.token_info)
-    }
+     public fun total_supply(token: &DebtCMTAT): u64 {
+         base::total_supply(&token.treasury_cap)
+     }
 
-    public fun balance_of(token: &DebtCMTAT, account: address): u64 {
-        base::balance_of(&token.balances, account)
-    }
+     public fun paused(compliance_state: &ComplianceState): bool {
+         pause::is_paused(&compliance_state.pause_state)
+     }
 
-    public fun get_active_balance_of(token: &DebtCMTAT, account: address): u64 {
-        let total_balance = base::balance_of(&token.balances, account);
-        freeze::get_active_balance(total_balance, &token.freeze_state, account)
-    }
+     public fun deactivated(compliance_state: &ComplianceState): bool {
+         pause::is_deactivated(&compliance_state.pause_state)
+     }
 
-    public fun paused(token: &DebtCMTAT): bool {
-        pause::is_paused(&token.pause_state)
-    }
+     public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
+         freeze::is_frozen(&compliance_state.freeze_state, account)
+     }
 
-    public fun is_frozen(token: &DebtCMTAT, account: address): bool {
-        freeze::is_frozen(&token.freeze_state, account)
-    }
+     public fun debt(compliance_state: &ComplianceState): String {
+         debt::get_debt(&compliance_state.debt_state)
+     }
 
-    public fun debt(token: &DebtCMTAT): String {
-        debt::get_debt(&token.debt_state)
-    }
+     public fun credit_events(compliance_state: &ComplianceState): String {
+         debt::get_credit_events(&compliance_state.debt_state)
+     }
 
-    public fun credit_events(token: &DebtCMTAT): String {
-        debt::get_credit_events(&token.debt_state)
-    }
+     public fun debt_engine(compliance_state: &ComplianceState): address {
+         debt::get_debt_engine(&compliance_state.debt_state)
+     }
 
-    public fun debt_engine(token: &DebtCMTAT): address {
-        debt::get_debt_engine(&token.debt_state)
-    }
-
-    public fun is_default_flagged(token: &DebtCMTAT): bool {
-        debt::is_default_flagged(&token.debt_state)
-    }
+     public fun is_default_flagged(compliance_state: &ComplianceState): bool {
+         debt::is_default_flagged(&compliance_state.debt_state)
+     }
 
     public fun document_uri(token: &DebtCMTAT): String {
         token.document_uri
@@ -175,78 +177,70 @@ module move_cmtat::debt_cmtat {
 
     // ============ Administrative Functions ============
 
-    public entry fun set_terms(
-        token: &mut DebtCMTAT,
-        new_terms: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
-        base::set_terms(&mut token.token_info, new_terms);
-    }
+     public entry fun set_terms(
+         _admin_cap: &AdminCap,
+         token: &mut DebtCMTAT,
+         new_terms: String
+     ) {
+         base::set_terms(&mut token.token_info, new_terms);
+     }
 
-    public entry fun set_information(
-        token: &mut DebtCMTAT,
-        new_info: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
-        base::set_information(&mut token.token_info, new_info);
-    }
+     public entry fun set_information(
+         _admin_cap: &AdminCap,
+         token: &mut DebtCMTAT,
+         new_info: String
+     ) {
+         base::set_information(&mut token.token_info, new_info);
+     }
 
-    public entry fun set_token_id(
-        token: &mut DebtCMTAT,
-        new_id: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
-        base::set_token_id(&mut token.token_info, new_id);
-    }
+     public entry fun set_token_id(
+         _admin_cap: &AdminCap,
+         token: &mut DebtCMTAT,
+         new_id: String
+     ) {
+         base::set_token_id(&mut token.token_info, new_id);
+     }
 
-    public entry fun set_document_uri(
-        token: &mut DebtCMTAT,
-        uri: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::document_role());
-        token.document_uri = uri;
-    }
+     public entry fun set_document_uri(
+         _admin_cap: &AdminCap,
+         token: &mut DebtCMTAT,
+         uri: String
+     ) {
+         token.document_uri = uri;
+     }
 
     // ============ Debt-Specific Functions ============
 
-    public entry fun set_debt(
-        token: &mut DebtCMTAT,
-        debt_info: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::debt_role());
-        debt::set_debt(&mut token.debt_state, debt_info);
-    }
+     public entry fun set_debt(
+         _debt_cap: &DebtCap,
+         compliance_state: &mut ComplianceState,
+         debt_info: String
+     ) {
+         debt::set_debt(&mut compliance_state.debt_state, debt_info);
+     }
 
-    public entry fun set_credit_events(
-        token: &mut DebtCMTAT,
-        events: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::debt_role());
-        debt::set_credit_events(&mut token.debt_state, events);
-    }
+     public entry fun set_credit_events(
+         _debt_cap: &DebtCap,
+         compliance_state: &mut ComplianceState,
+         events: String
+     ) {
+         debt::set_credit_events(&mut compliance_state.debt_state, events);
+     }
 
-    public entry fun set_debt_engine(
-        token: &mut DebtCMTAT,
-        engine: address,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::debt_role());
-        debt::set_debt_engine(&mut token.debt_state, engine);
-    }
+     public entry fun set_debt_engine(
+         _debt_cap: &DebtCap,
+         compliance_state: &mut ComplianceState,
+         engine: address
+     ) {
+         debt::set_debt_engine(&mut compliance_state.debt_state, engine);
+     }
 
-    public entry fun flag_default(
-        token: &mut DebtCMTAT,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::debt_role());
-        debt::flag_default(&mut token.debt_state);
-    }
+     public entry fun flag_default(
+         _debt_cap: &DebtCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         debt::flag_default(&mut compliance_state.debt_state);
+     }
 
     // ============ Minting Functions ============
 
@@ -264,154 +258,112 @@ module move_cmtat::debt_cmtat {
 
         let coins = base::mint(&mut token.treasury_cap, amount, ctx);
         base::transfer_coin(coins, to);
-    }
+     }
 
-    public entry fun batch_mint(
-        token: &mut DebtCMTAT,
-        recipients: vector<address>,
-        amounts: vector<u64>,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        debt::require_not_in_default(&token.debt_state);
-        
-        let i = 0;
-        let len = vector::length(&recipients);
-        assert!(len == vector::length(&amounts), EInvalidAmount);
+     // ============ Burning Functions ============
 
-        while (i < len) {
-            let recipient = *vector::borrow(&recipients, i);
-            let amount = *vector::borrow(&amounts, i);
-            
-            freeze::require_not_frozen(&token.freeze_state, recipient);
-            
-            let current_balance = base::balance_of(&token.balances, recipient);
-            base::update_balance(&mut token.balances, recipient, current_balance + amount);
-            base::increase_total_supply(&mut token.token_info, amount);
-            
-            i = i + 1;
-        }
-    }
+     /// Burn coins provided by the user
+     public entry fun burn(
+         token: &mut DebtCMTAT,
+         coins: Coin<base::CMTAT>,
+         compliance_state: &ComplianceState
+     ) {
+         pause::require_not_paused(&compliance_state.pause_state);
+         base::burn(&mut token.treasury_cap, coins);
+     }
 
-    // ============ Burning Functions ============
+     // ============ Pause Functions ============
 
-    public entry fun burn(
-        token: &mut DebtCMTAT,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        
-        let balance = base::balance_of(&token.balances, sender);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, sender, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
+     public entry fun pause(
+         _pause_cap: &PauseCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         pause::pause(&mut compliance_state.pause_state);
+     }
 
-    public entry fun burn_from(
-        token: &mut DebtCMTAT,
-        from: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
+     public entry fun unpause(
+         _pause_cap: &PauseCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         pause::unpause(&mut compliance_state.pause_state);
+     }
 
-        let balance = base::balance_of(&token.balances, from);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
-
-    // ============ Pause Functions ============
-
-    public entry fun pause(
-        token: &mut DebtCMTAT,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
-        pause::pause(&mut token.pause_state);
-    }
-
-    public entry fun unpause(
-        token: &mut DebtCMTAT,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
-        pause::unpause(&mut token.pause_state);
-    }
+     public entry fun deactivate_contract(
+         _admin_cap: &AdminCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         pause::deactivate(&mut compliance_state.pause_state);
+     }
 
     // ============ Freeze Functions ============
 
-    public entry fun set_address_frozen(
-        token: &mut DebtCMTAT,
-        account: address,
-        frozen: bool,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        freeze::set_address_frozen(&mut token.freeze_state, account, frozen);
-    }
+     public entry fun set_address_frozen(
+         _freeze_cap: &FreezeCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         frozen: bool
+     ) {
+         freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
+     }
 
-    public entry fun freeze_partial_tokens(
-        token: &mut DebtCMTAT,
-        account: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::erc20enforcer_role());
-        freeze::freeze_partial_tokens(&mut token.freeze_state, account, amount);
-    }
+     public entry fun freeze_partial_tokens(
+         _freeze_cap: &FreezeCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         amount: u64
+     ) {
+         freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+     }
 
-    public entry fun unfreeze_partial_tokens(
-        token: &mut DebtCMTAT,
-        account: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::erc20enforcer_role());
-        freeze::unfreeze_partial_tokens(&mut token.freeze_state, account, amount);
-    }
+     public entry fun unfreeze_partial_tokens(
+         _freeze_cap: &FreezeCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         amount: u64
+     ) {
+         freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+     }
 
     // ============ Snapshot Functions ============
 
-    public entry fun schedule_snapshot(
-        token: &mut DebtCMTAT,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::snapshooter_role());
-        
-        let timestamp = clock::timestamp_ms(clock);
-        let total_supply = base::total_supply(&token.token_info);
-        
-        snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
-    }
+     public entry fun schedule_snapshot(
+         _snapshot_cap: &SnapshotCap,
+         token: &mut DebtCMTAT,
+         clock: &Clock,
+         ctx: &mut TxContext
+     ) {
+         let timestamp = clock::timestamp_ms(clock);
+         let total_supply = base::total_supply(&token.treasury_cap);
 
-    // ============ Transfer Functions ============
+         snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
+     }
 
-    public entry fun transfer(
-        token: &mut DebtCMTAT,
-        to: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, sender);
-        freeze::require_not_frozen(&token.freeze_state, to);
+     // ============ Transfer Functions ============
 
-        let sender_balance = base::balance_of(&token.balances, sender);
-        let active_balance = freeze::get_active_balance(sender_balance, &token.freeze_state, sender);
-        assert!(active_balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, sender, sender_balance - amount);
-        
-        let to_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, to_balance + amount);
-    }
+     /// Transfer function with CMTAT compliance validation
+     /// Users call this to transfer their Coin<CMTAT> with regulatory checks
+     public entry fun transfer(
+         compliance_state: &ComplianceState,
+         coins: Coin<base::CMTAT>,
+         to: address,
+         ctx: &TxContext
+     ) {
+         let from = tx_context::sender(ctx);
+         let amount = base::coin_value(&coins);
+
+         // Validate transfer using rule engine (without allowlist)
+         let restriction_code = rule_engine::validate_transfer(
+             &compliance_state.pause_state,
+             &compliance_state.freeze_state,
+             from,
+             to,
+             amount,
+             amount  // from_balance is the coin value being transferred
+         );
+
+         assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
+
+         // Transfer the coins
+         base::transfer_coin(coins, to);
+     }
 }

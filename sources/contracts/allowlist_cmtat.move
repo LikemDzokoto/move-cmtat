@@ -113,33 +113,16 @@ module move_cmtat::allowlist_cmtat {
 
         // Transfer initial coins to recipient
         if (initial_supply > 0) {
-            transfer::transfer(initial_coins, recipient);
+            transfer::public_transfer(initial_coins, recipient);
         } else {
             base::destroy_zero_coin(initial_coins);
         }
     }
 
-    // ============ Role Management ============
+     // ============ Capability-Based Access Control ============
 
-    fun grant_role_internal(token: &mut AllowlistCMTAT, account: address, role: vector<u8>) {
-        if (!table::contains(&token.roles, account)) {
-            table::add(&mut token.roles, account, vector::empty());
-        };
-        let roles = table::borrow_mut(&mut token.roles, account);
-        vector::push_back(roles, role);
-    }
-
-    fun has_role(token: &AllowlistCMTAT, account: address, role: vector<u8>): bool {
-        if (!table::contains(&token.roles, account)) {
-            return false
-        };
-        let roles = table::borrow(&token.roles, account);
-        vector::contains(roles, &role)
-    }
-
-    fun require_role(token: &AllowlistCMTAT, account: address, role: vector<u8>) {
-        assert!(has_role(token, account, role), EUnauthorized);
-    }
+     /// Note: Access control is now enforced by function signatures requiring capability objects
+     /// No role tables needed - capabilities are transferable objects that grant authority
 
     // ============ View Functions ============
 
@@ -155,34 +138,29 @@ module move_cmtat::allowlist_cmtat {
         base::decimals(&token.token_info)
     }
 
-    public fun total_supply(token: &AllowlistCMTAT): u64 {
-        base::total_supply(&token.token_info)
-    }
+     public fun total_supply(token: &AllowlistCMTAT): u64 {
+         base::total_supply(&token.treasury_cap)
+     }
 
-    public fun balance_of(token: &AllowlistCMTAT, account: address): u64 {
-        base::balance_of(&token.balances, account)
-    }
+     public fun paused(compliance_state: &ComplianceState): bool {
+         pause::is_paused(&compliance_state.pause_state)
+     }
 
-    public fun get_active_balance_of(token: &AllowlistCMTAT, account: address): u64 {
-        let total_balance = base::balance_of(&token.balances, account);
-        freeze::get_active_balance(total_balance, &token.freeze_state, account)
-    }
+     public fun deactivated(compliance_state: &ComplianceState): bool {
+         pause::is_deactivated(&compliance_state.pause_state)
+     }
 
-    public fun paused(compliance_state: &ComplianceState): bool {
-        pause::is_paused(&compliance_state.pause_state)
-    }
+     public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
+         freeze::is_frozen(&compliance_state.freeze_state, account)
+     }
 
-    public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
-        freeze::is_frozen(&compliance_state.freeze_state, account)
-    }
+     public fun is_allowlisted(compliance_state: &ComplianceState, account: address): bool {
+         allowlist::is_allowlisted(&compliance_state.allowlist_state, account)
+     }
 
-    public fun is_allowlisted(compliance_state: &ComplianceState, account: address): bool {
-        allowlist::is_allowlisted(&compliance_state.allowlist_state, account)
-    }
-
-    public fun allowlist_enabled(token: &AllowlistCMTAT): bool {
-        allowlist::is_enabled(&token.allowlist_state)
-    }
+     public fun allowlist_enabled(compliance_state: &ComplianceState): bool {
+         allowlist::is_enabled(&compliance_state.allowlist_state)
+     }
 
     public fun document_uri(token: &AllowlistCMTAT): String {
         token.document_uri
@@ -190,41 +168,37 @@ module move_cmtat::allowlist_cmtat {
 
     // ============ Administrative Functions ============
 
-    public entry fun set_terms(
-        token: &mut AllowlistCMTAT,
-        new_terms: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
-        base::set_terms(&mut token.token_info, new_terms);
-    }
+     public entry fun set_terms(
+         _admin_cap: &AdminCap,
+         token: &mut AllowlistCMTAT,
+         new_terms: String
+     ) {
+         base::set_terms(&mut token.token_info, new_terms);
+     }
 
-    public entry fun set_information(
-        token: &mut AllowlistCMTAT,
-        new_info: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
-        base::set_information(&mut token.token_info, new_info);
-    }
+     public entry fun set_information(
+         _admin_cap: &AdminCap,
+         token: &mut AllowlistCMTAT,
+         new_info: String
+     ) {
+         base::set_information(&mut token.token_info, new_info);
+     }
 
-    public entry fun set_token_id(
-        token: &mut AllowlistCMTAT,
-        new_id: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::extra_information_role());
-        base::set_token_id(&mut token.token_info, new_id);
-    }
+     public entry fun set_token_id(
+         _admin_cap: &AdminCap,
+         token: &mut AllowlistCMTAT,
+         new_id: String
+     ) {
+         base::set_token_id(&mut token.token_info, new_id);
+     }
 
-    public entry fun set_document_uri(
-        token: &mut AllowlistCMTAT,
-        uri: String,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::document_role());
-        token.document_uri = uri;
-    }
+     public entry fun set_document_uri(
+         _admin_cap: &AdminCap,
+         token: &mut AllowlistCMTAT,
+         uri: String
+     ) {
+         token.document_uri = uri;
+     }
 
     // ============ Minting Functions ============
 
@@ -242,164 +216,104 @@ module move_cmtat::allowlist_cmtat {
 
         let coins = base::mint(&mut token.treasury_cap, amount, ctx);
         base::transfer_coin(coins, to);
-    }
+     }
 
-    public entry fun batch_mint(
-        token: &mut AllowlistCMTAT,
-        recipients: vector<address>,
-        amounts: vector<u64>,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        
-        let i = 0;
-        let len = vector::length(&recipients);
-        assert!(len == vector::length(&amounts), EInvalidAmount);
+     // ============ Burning Functions ============
 
-        while (i < len) {
-            let recipient = *vector::borrow(&recipients, i);
-            let amount = *vector::borrow(&amounts, i);
-            
-            freeze::require_not_frozen(&token.freeze_state, recipient);
-            allowlist::require_allowlisted(&token.allowlist_state, recipient);
-            
-            let current_balance = base::balance_of(&token.balances, recipient);
-            base::update_balance(&mut token.balances, recipient, current_balance + amount);
-            base::increase_total_supply(&mut token.token_info, amount);
-            
-            i = i + 1;
-        }
-    }
+     /// Burn coins provided by the user
+     public entry fun burn(
+         token: &mut AllowlistCMTAT,
+         coins: Coin<base::CMTAT>,
+         compliance_state: &ComplianceState
+     ) {
+         pause::require_not_paused(&compliance_state.pause_state);
+         base::burn(&mut token.treasury_cap, coins);
+     }
 
-    // ============ Burning Functions ============
+     // ============ Pause Functions ============
 
-    public entry fun burn(
-        token: &mut AllowlistCMTAT,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        
-        let balance = base::balance_of(&token.balances, sender);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, sender, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
+     public entry fun pause(
+         _pause_cap: &PauseCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         pause::pause(&mut compliance_state.pause_state);
+     }
 
-    public entry fun burn_from(
-        token: &mut AllowlistCMTAT,
-        from: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
+     public entry fun unpause(
+         _pause_cap: &PauseCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         pause::unpause(&mut compliance_state.pause_state);
+     }
 
-        let balance = base::balance_of(&token.balances, from);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
-
-    // ============ Pause Functions ============
-
-    public entry fun pause(
-        token: &mut AllowlistCMTAT,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
-        pause::pause(&mut token.pause_state);
-    }
-
-    public entry fun unpause(
-        token: &mut AllowlistCMTAT,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
-        pause::unpause(&mut token.pause_state);
-    }
+     public entry fun deactivate_contract(
+         _admin_cap: &AdminCap,
+         compliance_state: &mut ComplianceState
+     ) {
+         pause::deactivate(&mut compliance_state.pause_state);
+     }
 
     // ============ Freeze Functions ============
 
-    public entry fun set_address_frozen(
-        token: &mut AllowlistCMTAT,
-        account: address,
-        frozen: bool,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        freeze::set_address_frozen(&mut token.freeze_state, account, frozen);
-    }
+     public entry fun set_address_frozen(
+         _freeze_cap: &FreezeCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         frozen: bool
+     ) {
+         freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
+     }
 
-    public entry fun freeze_partial_tokens(
-        token: &mut AllowlistCMTAT,
-        account: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::erc20enforcer_role());
-        freeze::freeze_partial_tokens(&mut token.freeze_state, account, amount);
-    }
+     public entry fun freeze_partial_tokens(
+         _freeze_cap: &FreezeCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         amount: u64
+     ) {
+         freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+     }
 
-    public entry fun unfreeze_partial_tokens(
-        token: &mut AllowlistCMTAT,
-        account: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::erc20enforcer_role());
-        freeze::unfreeze_partial_tokens(&mut token.freeze_state, account, amount);
-    }
+     public entry fun unfreeze_partial_tokens(
+         _freeze_cap: &FreezeCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         amount: u64
+     ) {
+         freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+     }
 
     // ============ Allowlist Functions ============
 
-    public entry fun enable_allowlist(
-        token: &mut AllowlistCMTAT,
-        enabled: bool,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        allowlist::set_enabled(&mut token.allowlist_state, enabled);
-    }
+     public entry fun enable_allowlist(
+         _allowlist_cap: &AllowlistCap,
+         compliance_state: &mut ComplianceState,
+         enabled: bool
+     ) {
+         allowlist::set_enabled(&mut compliance_state.allowlist_state, enabled);
+     }
 
-    public entry fun set_address_allowlist(
-        token: &mut AllowlistCMTAT,
-        account: address,
-        status: bool,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        allowlist::set_address_allowlist(&mut token.allowlist_state, account, status);
-    }
-
-    public entry fun batch_set_address_allowlist(
-        token: &mut AllowlistCMTAT,
-        accounts: vector<address>,
-        statuses: vector<bool>,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        allowlist::batch_set_address_allowlist(&mut token.allowlist_state, accounts, statuses);
-    }
+     public entry fun set_address_allowlist(
+         _allowlist_cap: &AllowlistCap,
+         compliance_state: &mut ComplianceState,
+         account: address,
+         status: bool
+     ) {
+         allowlist::set_address_allowlist(&mut compliance_state.allowlist_state, account, status);
+     }
 
     // ============ Snapshot Functions ============
 
-    public entry fun schedule_snapshot(
-        token: &mut AllowlistCMTAT,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::snapshooter_role());
-        
-        let timestamp = clock::timestamp_ms(clock);
-        let total_supply = base::total_supply(&token.token_info);
-        
-        snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
-    }
+     public entry fun schedule_snapshot(
+         _snapshot_cap: &SnapshotCap,
+         token: &mut AllowlistCMTAT,
+         clock: &Clock,
+         ctx: &mut TxContext
+     ) {
+         let timestamp = clock::timestamp_ms(clock);
+         let total_supply = base::total_supply(&token.treasury_cap);
+
+         snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
+     }
 
     // ============ Transfer Functions ============
 

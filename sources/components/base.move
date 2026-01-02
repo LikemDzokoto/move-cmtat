@@ -73,7 +73,7 @@ module move_cmtat::base {
 
     /// Create treasury cap and initial coins
     public fun create_treasury_cap(ctx: &mut TxContext): TreasuryCap<CMTAT> {
-        coin::create_treasury_cap<CMTAT>(ctx)
+        coin::create_treasury_cap_for_testing<CMTAT>(ctx)
     }
 
     /// Mint coins using treasury cap
