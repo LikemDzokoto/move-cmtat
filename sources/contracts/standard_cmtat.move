@@ -1,27 +1,20 @@
- /// Standard CMTAT - Full Feature Set with Transfer Validation
+/// Standard CMTAT - Full Feature Set with Transfer Validation
  /// Implements ERC-1404 compliance with transfer restriction codes
  /// Uses capability-based access control and Coin<T> architecture
  module move_cmtat::standard_cmtat {
-     use std::string::String;
-     use iota::object::{Self, UID};
-     use iota::tx_context::{Self, TxContext};
-     use iota::transfer;
-     use iota::coin::{Self, Coin, TreasuryCap};
-     use iota::clock::{Self, Clock};
+      use std::string::String;
+      use iota::coin::{Self, Coin, TreasuryCap};
+      use iota::clock::{Self, Clock};
+      
+        use move_cmtat::base;
+        use move_cmtat::pause;
+        use move_cmtat::freeze;
+        use move_cmtat::validation;
+        use move_cmtat::rule_engine;
+        use move_cmtat::snapshot_engine;
+        use move_cmtat::icmtat;
 
-     use move_cmtat::base;
-     use move_cmtat::pause;
-     use move_cmtat::freeze;
-     use move_cmtat::validation;
-     use move_cmtat::rule_engine;
-     use move_cmtat::snapshot_engine;
-     use move_cmtat::icmtat;
 
-     /// Errors
-     const EUnauthorized: u64 = 4000;
-     const EInsufficientBalance: u64 = 4001;
-     const EInvalidAmount: u64 = 4002;
-     const ETransferRestricted: u64 = 4003;
 
      /// Standard CMTAT Token shared object
      public struct StandardCMTAT has key {
@@ -118,12 +111,9 @@
          }
      }
 
-     // ============ Capability-Based Access Control ============
+      // ============ Capability-Based Access Control ============
 
-     /// Note: Access control is now enforced by function signatures requiring capability objects
-     /// No role tables needed - capabilities are transferable objects that grant authority
-
-    // ============ View Functions ============
+     // ============ View Functions ============
 
     public fun name(token: &StandardCMTAT): String {
         base::name(&token.token_info)
@@ -219,14 +209,14 @@
 
     // ============ Minting Functions ============
 
-     public entry fun mint(
-         mint_cap: &MintCap,
-         token: &mut StandardCMTAT,
-         compliance_state: &ComplianceState,
-         to: address,
-         amount: u64,
-         ctx: &mut TxContext
-     ) {
+      public entry fun mint(
+          _mint_cap: &MintCap,
+          token: &mut StandardCMTAT,
+          compliance_state: &ComplianceState,
+          to: address,
+          amount: u64,
+          ctx: &mut TxContext
+      ) {
          pause::require_not_paused(&compliance_state.pause_state);
          freeze::require_not_frozen(&compliance_state.freeze_state, to);
 
@@ -300,13 +290,13 @@
 
      // ============ Snapshot Functions ============
 
-     public entry fun schedule_snapshot(
-         _snapshot_cap: &SnapshotCap,
-         token: &mut StandardCMTAT,
-         clock: &Clock,
-         ctx: &mut TxContext
-     ) {
-         let timestamp = clock::timestamp_ms(clock);
+      public entry fun schedule_snapshot(
+          _snapshot_cap: &SnapshotCap,
+          token: &mut StandardCMTAT,
+          _clock: &Clock,
+          ctx: &mut TxContext
+      ) {
+          let timestamp = clock::timestamp_ms(_clock);
          let total_supply = base::total_supply(&token.treasury_cap);
 
          snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);

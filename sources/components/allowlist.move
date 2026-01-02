@@ -1,13 +1,9 @@
 /// Allowlist Component - KYC/AML Compliance
 /// Manages approved addresses for token transfers
 module move_cmtat::allowlist {
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};
-
+    use iota::table::Table;
     /// Errors
     const ENotAllowlisted: u64 = 300;
-    const EAllowlistNotEnabled: u64 = 301;
 
     /// Allowlist state
     public struct AllowlistState has key, store {

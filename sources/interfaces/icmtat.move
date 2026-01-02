@@ -1,7 +1,6 @@
 /// CMTAT Interface Definitions
 /// Defines the core interfaces for CMTAT token implementations
 module move_cmtat::icmtat {
-    use std::string::String;
 
     /// Restriction codes for transfer validation (ERC-1404 compatible)
     const RESTRICTION_CODE_VALID: u8 = 0;

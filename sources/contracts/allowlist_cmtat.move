@@ -3,12 +3,9 @@
 /// Uses capability-based access control and Coin<CMTAT> architecture
 module move_cmtat::allowlist_cmtat {
     use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::transfer;
     use iota::coin::{Self, Coin, TreasuryCap};
     use iota::clock::{Self, Clock};
-
+    
     use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
@@ -18,9 +15,6 @@ module move_cmtat::allowlist_cmtat {
     use move_cmtat::icmtat;
 
     /// Errors
-    const EUnauthorized: u64 = 2000;
-    const EInsufficientBalance: u64 = 2001;
-    const EInvalidAmount: u64 = 2002;
     const ETransferRestricted: u64 = 2003;
 
     /// Allowlist CMTAT Token shared object
@@ -119,12 +113,9 @@ module move_cmtat::allowlist_cmtat {
         }
     }
 
-     // ============ Capability-Based Access Control ============
+      // ============ Capability-Based Access Control ============
 
-     /// Note: Access control is now enforced by function signatures requiring capability objects
-     /// No role tables needed - capabilities are transferable objects that grant authority
-
-    // ============ View Functions ============
+     // ============ View Functions ============
 
     public fun name(token: &AllowlistCMTAT): String {
         base::name(&token.token_info)
@@ -303,13 +294,13 @@ module move_cmtat::allowlist_cmtat {
 
     // ============ Snapshot Functions ============
 
-     public entry fun schedule_snapshot(
-         _snapshot_cap: &SnapshotCap,
-         token: &mut AllowlistCMTAT,
-         clock: &Clock,
-         ctx: &mut TxContext
-     ) {
-         let timestamp = clock::timestamp_ms(clock);
+      public entry fun schedule_snapshot(
+          _snapshot_cap: &SnapshotCap,
+          token: &mut AllowlistCMTAT,
+          _clock: &Clock,
+          ctx: &mut TxContext
+      ) {
+          let timestamp = clock::timestamp_ms(_clock);
          let total_supply = base::total_supply(&token.treasury_cap);
 
          snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);

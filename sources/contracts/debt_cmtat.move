@@ -3,24 +3,19 @@
 /// Implements 10 roles including DEBT_ROLE
 module move_cmtat::debt_cmtat {
     use std::string::String;
-     use iota::object::{Self, UID};
-     use iota::tx_context::{Self, TxContext};
-     use iota::transfer;
-     use iota::coin::{Self, Coin, TreasuryCap};
-     use iota::clock::{Self, Clock};
+    use iota::coin::{Self, Coin, TreasuryCap};
+    use iota::clock::{Self, Clock};
     
     use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
     use move_cmtat::debt;
+    use move_cmtat::rule_engine;
     use move_cmtat::snapshot_engine;
     use move_cmtat::icmtat;
 
     /// Errors
-    const EUnauthorized: u64 = 3000;
-    const EInsufficientBalance: u64 = 3001;
-    const EInvalidAmount: u64 = 3002;
-    const EInDefault: u64 = 3003;
+    const ETransferRestricted: u64 = 3004;
 
     /// Debt CMTAT Token shared object
     public struct DebtCMTAT has key {
@@ -122,11 +117,7 @@ module move_cmtat::debt_cmtat {
 
      // ============ Capability-Based Access Control ============
 
-     /// Note: Access control is now enforced by function signatures requiring capability objects
-     /// No role tables needed - capabilities are transferable objects that grant authority
-
-    // ============ View Functions ============
-
+     // ============ View Functions ============
     public fun name(token: &DebtCMTAT): String {
         base::name(&token.token_info)
     }
@@ -342,24 +333,24 @@ module move_cmtat::debt_cmtat {
 
      /// Transfer function with CMTAT compliance validation
      /// Users call this to transfer their Coin<CMTAT> with regulatory checks
-     public entry fun transfer(
-         compliance_state: &ComplianceState,
-         coins: Coin<base::CMTAT>,
-         to: address,
-         ctx: &TxContext
-     ) {
-         let from = tx_context::sender(ctx);
-         let amount = base::coin_value(&coins);
+      public entry fun transfer(
+          _compliance_state: &ComplianceState,
+          coins: Coin<base::CMTAT>,
+          to: address,
+          ctx: &TxContext
+      ) {
+          let _from = tx_context::sender(ctx);
+          let _amount = base::coin_value(&coins);
 
-         // Validate transfer using rule engine (without allowlist)
-         let restriction_code = rule_engine::validate_transfer(
-             &compliance_state.pause_state,
-             &compliance_state.freeze_state,
-             from,
-             to,
-             amount,
-             amount  // from_balance is the coin value being transferred
-         );
+          // Validate transfer using rule engine (without allowlist)
+          let restriction_code = rule_engine::validate_transfer(
+              &_compliance_state.pause_state,
+              &_compliance_state.freeze_state,
+              _from,
+              to,
+              _amount,
+              _amount  // from_balance is the coin value being transferred
+          );
 
          assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
 

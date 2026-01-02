@@ -1,10 +1,7 @@
 /// Freeze Component - Address Freezing and Partial Token Freezing
 /// Allows enforcement of regulatory compliance by freezing addresses
 module move_cmtat::freeze {
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};
-
+    use iota::table::Table;
     /// Errors
     const EFrozenAddress: u64 = 200;
     const EInsufficientActiveBalance: u64 = 201;

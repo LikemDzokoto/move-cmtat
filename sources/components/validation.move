@@ -1,7 +1,7 @@
 /// Validation Component - Transfer Validation (ERC-1404)
 /// Implements transfer restriction logic with detailed error codes
 module move_cmtat::validation {
-    use std::string::{Self, String};
+    use std::string::String;
     use move_cmtat::icmtat;
 
     /// Restriction messages

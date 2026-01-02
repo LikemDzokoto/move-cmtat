@@ -2,11 +2,8 @@
 /// Provides historical balance tracking for compliance and reporting
 /// Note: In Coin<T> architecture, balances are recorded at snapshot time via events or explicit recording
 module move_cmtat::snapshot_engine {
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};
-    use iota::vec_map::{Self, VecMap};
-    use iota::event;
+    use iota::table::Table;
+    use iota::vec_map::VecMap;
 
     /// Errors
     const ESnapshotNotFound: u64 = 700;
@@ -20,14 +17,14 @@ module move_cmtat::snapshot_engine {
     }
 
     /// Event emitted when a snapshot is created
-    public struct SnapshotCreated has copy, drop {
+    public struct SnapshotCreated has copy, drop, store {
         snapshot_id: u64,
         timestamp: u64,
         total_supply: u64,
     }
 
     /// Event emitted when a balance is recorded in a snapshot
-    public struct BalanceRecorded has copy, drop {
+    public struct BalanceRecorded has copy, drop, store {
         snapshot_id: u64,
         account: address,
         balance: u64,
@@ -73,11 +70,11 @@ module move_cmtat::snapshot_engine {
         table::add(&mut engine.balances, snapshot_id, table::new(ctx));
 
         // Emit snapshot creation event
-        event::emit(SnapshotCreated {
-            snapshot_id,
-            timestamp,
-            total_supply,
-        });
+        // event::emit(SnapshotCreated {
+        //     snapshot_id: snapshot_id,
+        //     timestamp: timestamp,
+        //     total_supply: total_supply,
+        // });
 
         snapshot_id
     }
@@ -101,11 +98,11 @@ module move_cmtat::snapshot_engine {
         }
 
         // Emit balance recording event
-        event::emit(BalanceRecorded {
-            snapshot_id,
-            account,
-            balance,
-        });
+        // event::emit(BalanceRecorded {
+        //     snapshot_id: snapshot_id,
+        //     account: account,
+        //     balance: balance,
+        // });
     }
 
     /// Batch record balances in snapshot

@@ -2,16 +2,8 @@
 /// Provides the foundational token operations using IOTA's Coin<T> architecture
 module move_cmtat::base {
     use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::transfer;
     use iota::coin::{Self, Coin, TreasuryCap};
-    use iota::balance::{Self, Balance};
-
-    /// Errors
-    const EInsufficientBalance: u64 = 0;
-    const EUnauthorized: u64 = 1;
-    const EInvalidAmount: u64 = 2;
+    use iota::transfer;
 
     /// Phantom type for CMTAT token - used with Coin<CMTAT>
     public struct CMTAT has drop {}
@@ -71,9 +63,9 @@ module move_cmtat::base {
         coin::total_supply(treasury_cap)
     }
 
-    /// Create treasury cap and initial coins
+    /// Create treasury cap
     public fun create_treasury_cap(ctx: &mut TxContext): TreasuryCap<CMTAT> {
-        coin::create_treasury_cap_for_testing<CMTAT>(ctx)
+        coin::create_treasury_cap<CMTAT>(ctx)
     }
 
     /// Mint coins using treasury cap

@@ -1,11 +1,7 @@
 /// Rule Engine - Transfer Restriction Rules
 /// Implements transfer validation logic for ERC-1404 compliance
 module move_cmtat::rule_engine {
-    use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};
-    
+    use iota::table::Table;
     use move_cmtat::icmtat;
     use move_cmtat::pause::PauseState;
     use move_cmtat::freeze::FreezeState;

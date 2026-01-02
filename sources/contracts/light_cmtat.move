@@ -3,11 +3,8 @@
 /// Uses Coin<CMTAT> for user balances, TreasuryCap<CMTAT> for mint/burn authority
 module move_cmtat::light_cmtat {
     use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::transfer;
     use iota::coin::{Self, Coin, TreasuryCap};
-
+    
     use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
@@ -15,9 +12,6 @@ module move_cmtat::light_cmtat {
     use move_cmtat::icmtat;
 
     /// Errors
-    const EUnauthorized: u64 = 1000;
-    const EInsufficientBalance: u64 = 1001;
-    const EInvalidAmount: u64 = 1002;
     const ETransferRestricted: u64 = 1003;
 
     /// Light CMTAT Token shared object (contains metadata and TreasuryCap)
@@ -107,9 +101,6 @@ module move_cmtat::light_cmtat {
     }
 
     // ============ Capability-Based Access Control ============
-
-    /// Note: Access control is now enforced by function signatures requiring capability objects
-    /// No role tables needed - capabilities are transferable objects that grant authority
 
     // ============ View Functions ============
 
@@ -211,7 +202,7 @@ module move_cmtat::light_cmtat {
     // ============ Minting Functions ============
 
     public entry fun mint(
-        mint_cap: &MintCap,
+        _mint_cap: &MintCap,
         token: &mut LightCMTAT,
         compliance_state: &ComplianceState,
         to: address,
@@ -236,14 +227,6 @@ module move_cmtat::light_cmtat {
         pause::require_not_paused(&compliance_state.pause_state);
         base::burn(&mut token.treasury_cap, coins);
     }
-
-    /// Note: burn_from (forced burn) is not supported in IOTA's object model
-    /// Users must voluntarily burn their own coins
-    /// For regulatory compliance, implement "burn_and_mint" pattern or freeze mechanism
-
-    /// Note: batch_burn, forced_burn, and burn_and_mint removed
-    /// In Coin<T> architecture, users voluntarily burn their own coins
-    /// For regulatory scenarios, implement freeze + voluntary redemption pattern
 
     // ============ Pause Functions ============
 

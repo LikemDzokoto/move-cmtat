@@ -2,11 +2,9 @@
 /// Specialized functionality for corporate bonds and debt instruments
 module move_cmtat::debt {
     use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
+
 
     /// Errors
-    const EDebtEngineNotSet: u64 = 400;
     const EDefaultFlagged: u64 = 401;
 
     /// Debt information state
