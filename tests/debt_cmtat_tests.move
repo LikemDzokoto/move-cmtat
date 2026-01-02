@@ -3,11 +3,14 @@ module move_cmtat::debt_cmtat_tests {
     use std::string;
     use iota::test_scenario::{Self, Scenario};
     use iota::clock;
-    use move_cmtat::debt_cmtat::{Self, DebtCMTAT, AdminCap};
+    use move_cmtat::debt_cmtat::{Self, DebtCMTAT, AdminCap, MintCap, DebtCap, SnapshotCap};
 
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1;
-    const USER2: address = @0x2;
+    const DEBT_ENGINE: address = @0xDEBT;
+
+    // ========== INIT TOKEN TEST ==========
+    // IOTA Native: Tests initialization with shared objects and capabilities
 
     #[test]
     fun test_init_token() {
@@ -21,32 +24,42 @@ module move_cmtat::debt_cmtat_tests {
                 string::utf8(b"Corporate Bond"),
                 string::utf8(b"BOND"),
                 18,
-                1000000,
+                0,
                 ADMIN,
                 ctx
             );
         };
 
-        // Check token was created
+        // Verify shared objects were created
         test_scenario::next_tx(scenario, ADMIN);
         {
             assert!(test_scenario::has_most_recent_shared<DebtCMTAT>(), 0);
-            
+
             let token = test_scenario::take_shared<DebtCMTAT>(scenario);
-            
+            let compliance_state = test_scenario::take_shared<debt_cmtat::ComplianceState>(scenario);
+
+            // Verify token metadata (no balance_of calls)
             assert!(debt_cmtat::name(&token) == string::utf8(b"Corporate Bond"), 1);
             assert!(debt_cmtat::symbol(&token) == string::utf8(b"BOND"), 2);
             assert!(debt_cmtat::decimals(&token) == 18, 3);
-            assert!(debt_cmtat::total_supply(&token) == 1000000, 4);
-            
+            assert!(debt_cmtat::total_supply(&token) == 0, 4);
+
+            // Verify compliance state
+            assert!(!debt_cmtat::paused(&compliance_state), 5);
+            assert!(!debt_cmtat::is_default_flagged(&compliance_state), 6);
+
             test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
         };
 
         test_scenario::end(scenario_val);
     }
 
+    // ========== SET DEBT TEST ==========
+    // IOTA Native: Tests debt information updates
+
     #[test]
-    fun test_debt_management() {
+    fun test_set_debt() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -63,23 +76,30 @@ module move_cmtat::debt_cmtat_tests {
             );
         };
 
-        // Set debt information
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let token = test_scenario::take_shared<DebtCMTAT>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            
-            debt_cmtat::set_debt(&mut token, string::utf8(b"5% Annual Coupon"), ctx);
-            assert!(debt_cmtat::debt(&token) == string::utf8(b"5% Annual Coupon"), 0);
-            
-            test_scenario::return_shared(token);
+            let compliance_state = test_scenario::take_shared<debt_cmtat::ComplianceState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<debt_cmtat::DebtCap>(scenario);
+
+            // Set debt information
+            let debt_info = string::utf8(b"5% Annual Coupon Bond");
+            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, debt_info);
+
+            // Verify debt information was set
+            assert!(debt_cmtat::debt(&compliance_state) == debt_info, 0);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, debt_cap);
         };
 
         test_scenario::end(scenario_val);
     }
 
+    // ========== SET CREDIT EVENTS TEST ==========
+    // IOTA Native: Tests credit event tracking
+
     #[test]
-    fun test_credit_events() {
+    fun test_set_credit_events() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -96,54 +116,27 @@ module move_cmtat::debt_cmtat_tests {
             );
         };
 
-        // Set credit events
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let token = test_scenario::take_shared<DebtCMTAT>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            
-            debt_cmtat::set_credit_events(&mut token, string::utf8(b"Coupon payment on 2024-01-01"), ctx);
-            assert!(debt_cmtat::credit_events(&token) == string::utf8(b"Coupon payment on 2024-01-01"), 0);
-            
-            test_scenario::return_shared(token);
+            let compliance_state = test_scenario::take_shared<debt_cmtat::ComplianceState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<debt_cmtat::DebtCap>(scenario);
+
+            // Set credit events
+            let credit_events = string::utf8(b"Coupon payment on 2024-01-01");
+            debt_cmtat::set_credit_events(&debt_cap, &mut compliance_state, credit_events);
+
+            // Verify credit events were set
+            assert!(debt_cmtat::credit_events(&compliance_state) == credit_events, 0);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, debt_cap);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    #[test]
-    fun test_debt_engine() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize token
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_token(
-                string::utf8(b"Corporate Bond"),
-                string::utf8(b"BOND"),
-                18,
-                0,
-                ADMIN,
-                ctx
-            );
-        };
-
-        // Set debt engine
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let token = test_scenario::take_shared<DebtCMTAT>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            
-            let engine_address = @0xDEBT;
-            debt_cmtat::set_debt_engine(&mut token, engine_address, ctx);
-            assert!(debt_cmtat::debt_engine(&token) == engine_address, 0);
-            
-            test_scenario::return_shared(token);
-        };
-
-        test_scenario::end(scenario_val);
-    }
+    // ========== FLAG DEFAULT TEST ==========
+    // IOTA Native: Tests default flag functionality
 
     #[test]
     fun test_flag_default() {
@@ -163,26 +156,33 @@ module move_cmtat::debt_cmtat_tests {
             );
         };
 
-        // Flag default
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let token = test_scenario::take_shared<DebtCMTAT>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            
-            assert!(!debt_cmtat::is_default_flagged(&token), 0);
-            
-            debt_cmtat::flag_default(&mut token, ctx);
-            assert!(debt_cmtat::is_default_flagged(&token), 1);
-            
-            test_scenario::return_shared(token);
+            let compliance_state = test_scenario::take_shared<debt_cmtat::ComplianceState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<debt_cmtat::DebtCap>(scenario);
+
+            // Verify initially not in default
+            assert!(!debt_cmtat::is_default_flagged(&compliance_state), 0);
+
+            // Flag default
+            debt_cmtat::flag_default(&debt_cap, &mut compliance_state);
+
+            // Verify now flagged as default
+            assert!(debt_cmtat::is_default_flagged(&compliance_state), 1);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, debt_cap);
         };
 
         test_scenario::end(scenario_val);
     }
 
+    // ========== OPERATIONS WHEN DEFAULT TEST ==========
+    // IOTA Native: Tests that operations are blocked when defaulted
+
     #[test]
     #[expected_failure]
-    fun test_mint_when_in_default() {
+    fun test_operations_when_default() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -199,20 +199,70 @@ module move_cmtat::debt_cmtat_tests {
             );
         };
 
-        // Flag default and try to mint (should fail)
         test_scenario::next_tx(scenario, ADMIN);
         {
             let token = test_scenario::take_shared<DebtCMTAT>(scenario);
+            let compliance_state = test_scenario::take_shared<debt_cmtat::ComplianceState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<debt_cmtat::DebtCap>(scenario);
+            let mint_cap = test_scenario::take_from_sender<debt_cmtat::MintCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            
-            debt_cmtat::flag_default(&mut token, ctx);
-            debt_cmtat::mint(&mut token, USER1, 1000, ctx); // Should fail
-            
+
+            // Flag default
+            debt_cmtat::flag_default(&debt_cap, &mut compliance_state);
+
+            // Try to mint - should fail when defaulted
+            debt_cmtat::mint(&mint_cap, &mut token, &compliance_state, USER1, 1000, ctx);
+
             test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, mint_cap);
         };
 
         test_scenario::end(scenario_val);
     }
+
+    // ========== SET DEBT ENGINE TEST ==========
+    // IOTA Native: Tests debt engine address management
+
+    #[test]
+    fun test_debt_engine() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize token
+        {
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::init_token(
+                string::utf8(b"Corporate Bond"),
+                string::utf8(b"BOND"),
+                18,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<debt_cmtat::ComplianceState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<debt_cmtat::DebtCap>(scenario);
+
+            // Set debt engine address
+            debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE);
+
+            // Verify debt engine was set
+            assert!(debt_cmtat::debt_engine(&compliance_state) == DEBT_ENGINE, 0);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== SNAPSHOT TEST ==========
+    // IOTA Native: Tests snapshot with debt context
 
     #[test]
     fun test_snapshot() {
@@ -226,25 +276,28 @@ module move_cmtat::debt_cmtat_tests {
                 string::utf8(b"Corporate Bond"),
                 string::utf8(b"BOND"),
                 18,
-                1000000,
+                0,
                 ADMIN,
                 ctx
             );
         };
 
-        // Create snapshot
         test_scenario::next_tx(scenario, ADMIN);
         {
             let token = test_scenario::take_shared<DebtCMTAT>(scenario);
+            let snapshot_cap = test_scenario::take_from_sender<debt_cmtat::SnapshotCap>(scenario);
             let clock_obj = clock::create_for_testing(test_scenario::ctx(scenario));
             let ctx = test_scenario::ctx(scenario);
-            
-            debt_cmtat::schedule_snapshot(&mut token, &clock_obj, ctx);
-            
+
+            // Create snapshot
+            debt_cmtat::schedule_snapshot(&snapshot_cap, &mut token, &clock_obj, ctx);
+
             clock::destroy_for_testing(clock_obj);
             test_scenario::return_shared(token);
+            test_scenario::return_to_sender(scenario, snapshot_cap);
         };
 
         test_scenario::end(scenario_val);
     }
-}
+}</content>
+<parameter name="filePath">/mnt/c/Users/Likem/Documents/move-cmtat/tests/debt_cmtat_tests.move
