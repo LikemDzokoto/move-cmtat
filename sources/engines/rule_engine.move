@@ -30,6 +30,7 @@ module move_cmtat::rule_engine {
 
     /// Validate transfer with all rules
     /// Returns restriction code (0 = valid, >0 = restricted)
+    /// Note: from_balance is now the value of the Coin<CMTAT> being transferred
     public fun validate_transfer(
         pause_state: &PauseState,
         freeze_state: &FreezeState,
@@ -69,6 +70,7 @@ module move_cmtat::rule_engine {
     }
 
     /// Validate transfer with allowlist
+    /// Note: from_balance is now the value of the Coin<CMTAT> being transferred
     public fun validate_transfer_with_allowlist(
         pause_state: &PauseState,
         freeze_state: &FreezeState,

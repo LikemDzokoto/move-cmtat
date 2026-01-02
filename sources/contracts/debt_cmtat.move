@@ -22,23 +22,31 @@ module move_cmtat::debt_cmtat {
     const EInvalidAmount: u64 = 3002;
     const EInDefault: u64 = 3003;
 
-    /// Debt CMTAT Token
-    public struct DebtCMTAT has key, store {
+    /// Debt CMTAT Token shared object
+    public struct DebtCMTAT has key {
         id: UID,
         token_info: base::TokenInfo,
-        balances: base::Balances,
-        pause_state: pause::PauseState,
-        freeze_state: freeze::FreezeState,
-        debt_state: debt::DebtState,
+        treasury_cap: TreasuryCap<base::CMTAT>,
         snapshot_engine: snapshot_engine::SnapshotEngine,
-        roles: Table<address, vector<vector<u8>>>,  // address -> list of roles
         document_uri: String,
     }
 
-    /// Admin capability
-    public struct AdminCap has key, store {
+    /// Shared compliance state object (includes debt state)
+    public struct ComplianceState has key {
         id: UID,
+        pause_state: pause::PauseState,
+        freeze_state: freeze::FreezeState,
+        debt_state: debt::DebtState,
     }
+
+    /// Capability structs for access control
+    public struct AdminCap has key, store { id: UID }
+    public struct MintCap has key, store { id: UID }
+    public struct BurnCap has key, store { id: UID }
+    public struct FreezeCap has key, store { id: UID }
+    public struct PauseCap has key, store { id: UID }
+    public struct SnapshotCap has key, store { id: UID }
+    public struct DebtCap has key, store { id: UID }
 
     /// Initialize Debt CMTAT
     public entry fun init_token(
@@ -243,19 +251,19 @@ module move_cmtat::debt_cmtat {
     // ============ Minting Functions ============
 
     public entry fun mint(
+        _mint_cap: &MintCap,
         token: &mut DebtCMTAT,
+        compliance_state: &ComplianceState,
         to: address,
         amount: u64,
-        ctx: &TxContext
+        ctx: &mut TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, to);
-        debt::require_not_in_default(&token.debt_state);
+        pause::require_not_paused(&compliance_state.pause_state);
+        freeze::require_not_frozen(&compliance_state.freeze_state, to);
+        debt::require_not_in_default(&compliance_state.debt_state);
 
-        let current_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, current_balance + amount);
-        base::increase_total_supply(&mut token.token_info, amount);
+        let coins = base::mint(&mut token.treasury_cap, amount, ctx);
+        base::transfer_coin(coins, to);
     }
 
     public entry fun batch_mint(

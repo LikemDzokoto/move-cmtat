@@ -1,39 +1,48 @@
-/// Light CMTAT - Minimal CMTAT Implementation
-/// Basic compliance features with 4 roles
-/// Suitable for standard token deployments with simple regulatory requirements
+/// Light CMTAT - Minimal CMTAT Implementation using IOTA Native Tokens
+/// Basic compliance features with capability-based access control
+/// Uses Coin<CMTAT> for user balances, TreasuryCap<CMTAT> for mint/burn authority
 module move_cmtat::light_cmtat {
     use std::string::String;
     use iota::object::{Self, UID};
     use iota::tx_context::{Self, TxContext};
     use iota::transfer;
-    use iota::table::{Self, Table};
-    
+    use iota::coin::{Self, Coin, TreasuryCap};
+
     use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
+    use move_cmtat::rule_engine;
     use move_cmtat::icmtat;
 
     /// Errors
     const EUnauthorized: u64 = 1000;
     const EInsufficientBalance: u64 = 1001;
     const EInvalidAmount: u64 = 1002;
+    const ETransferRestricted: u64 = 1003;
 
-    /// Light CMTAT Token
-    public struct LightCMTAT has key, store {
+    /// Light CMTAT Token shared object (contains metadata and TreasuryCap)
+    public struct LightCMTAT has key {
         id: UID,
         token_info: base::TokenInfo,
-        balances: base::Balances,
+        treasury_cap: TreasuryCap<base::CMTAT>,
+    }
+
+    /// Shared compliance state object
+    public struct ComplianceState has key {
+        id: UID,
         pause_state: pause::PauseState,
         freeze_state: freeze::FreezeState,
-        roles: Table<address, vector<vector<u8>>>,  // address -> list of roles
     }
 
-    /// Admin capability
-    public struct AdminCap has key, store {
-        id: UID,
-    }
+    /// Capability structs for access control (transferable objects)
+    public struct AdminCap has key, store { id: UID }
+    public struct MintCap has key, store { id: UID }
+    public struct BurnCap has key, store { id: UID }
+    public struct FreezeCap has key, store { id: UID }
+    public struct PauseCap has key, store { id: UID }
 
-    /// Initialize Light CMTAT
+    /// Initialize Light CMTAT with native IOTA token architecture
+    /// Creates TreasuryCap<CMTAT>, mints initial supply, and distributes capabilities
     public entry fun init_token(
         name: String,
         symbol: String,
@@ -42,61 +51,65 @@ module move_cmtat::light_cmtat {
         recipient: address,
         ctx: &mut TxContext
     ) {
+        // Create token metadata
+        let token_info = base::init_token_info(name, symbol, decimals, ctx);
+
+        // Create treasury cap for mint/burn authority
+        let treasury_cap = base::create_treasury_cap(ctx);
+
+        // Mint initial supply if specified
+        let initial_coins = if (initial_supply > 0) {
+            base::mint(&mut treasury_cap, initial_supply, ctx)
+        } else {
+            coin::zero<base::CMTAT>(ctx)
+        };
+
+        // Create token object
         let token = LightCMTAT {
             id: object::new(ctx),
-            token_info: base::init_token_info(name, symbol, decimals, ctx),
-            balances: base::init_balances(ctx),
+            token_info,
+            treasury_cap,
+        };
+
+        // Create compliance state
+        let compliance_state = ComplianceState {
+            id: object::new(ctx),
             pause_state: pause::init_pause_state(ctx),
             freeze_state: freeze::init_freeze_state(ctx),
-            roles: table::new(ctx),
         };
 
-        // Mint initial supply to recipient
-        if (initial_supply > 0) {
-            base::update_balance(&mut token.balances, recipient, initial_supply);
-            base::increase_total_supply(&mut token.token_info, initial_supply);
-        };
-
-        // Grant admin role to sender
+        // Create capability objects
         let admin = tx_context::sender(ctx);
-        grant_role_internal(&mut token, admin, icmtat::default_admin_role());
-        grant_role_internal(&mut token, admin, icmtat::minter_role());
-        grant_role_internal(&mut token, admin, icmtat::pauser_role());
-        grant_role_internal(&mut token, admin, icmtat::enforcer_role());
+        let admin_cap = AdminCap { id: object::new(ctx) };
+        let mint_cap = MintCap { id: object::new(ctx) };
+        let burn_cap = BurnCap { id: object::new(ctx) };
+        let freeze_cap = FreezeCap { id: object::new(ctx) };
+        let pause_cap = PauseCap { id: object::new(ctx) };
 
-        // Create and transfer admin capability
-        let admin_cap = AdminCap {
-            id: object::new(ctx),
-        };
-
+        // Share objects
         transfer::share_object(token);
+        transfer::share_object(compliance_state);
+
+        // Transfer capabilities to admin
         transfer::transfer(admin_cap, admin);
+        transfer::transfer(mint_cap, admin);
+        transfer::transfer(burn_cap, admin);
+        transfer::transfer(freeze_cap, admin);
+        transfer::transfer(pause_cap, admin);
+
+        // Transfer initial coins to recipient (if any)
+        if (initial_supply > 0) {
+            transfer::transfer(initial_coins, recipient);
+        } else {
+            // Destroy zero coin
+            base::destroy_zero_coin(initial_coins);
+        }
     }
 
-    // ============ Role Management ============
+    // ============ Capability-Based Access Control ============
 
-    /// Internal role grant
-    fun grant_role_internal(token: &mut LightCMTAT, account: address, role: vector<u8>) {
-        if (!table::contains(&token.roles, account)) {
-            table::add(&mut token.roles, account, vector::empty());
-        };
-        let roles = table::borrow_mut(&mut token.roles, account);
-        vector::push_back(roles, role);
-    }
-
-    /// Check if account has role
-    fun has_role(token: &LightCMTAT, account: address, role: vector<u8>): bool {
-        if (!table::contains(&token.roles, account)) {
-            return false
-        };
-        let roles = table::borrow(&token.roles, account);
-        vector::contains(roles, &role)
-    }
-
-    /// Require role
-    fun require_role(token: &LightCMTAT, account: address, role: vector<u8>) {
-        assert!(has_role(token, account, role), EUnauthorized);
-    }
+    /// Note: Access control is now enforced by function signatures requiring capability objects
+    /// No role tables needed - capabilities are transferable objects that grant authority
 
     // ============ View Functions ============
 
@@ -113,15 +126,18 @@ module move_cmtat::light_cmtat {
     }
 
     public fun total_supply(token: &LightCMTAT): u64 {
-        base::total_supply(&token.token_info)
+        base::total_supply(&token.treasury_cap)
     }
 
-    public fun balance_of(token: &LightCMTAT, account: address): u64 {
-        base::balance_of(&token.balances, account)
+    /// Note: balance_of is now handled by coin::value() on user's Coin<CMTAT> objects
+    /// This function is kept for compatibility but returns 0 (use wallet/indexer to query balances)
+    public fun balance_of(_token: &LightCMTAT, _account: address): u64 {
+        0  // Balances are in Coin<CMTAT> objects owned by users
     }
 
-    public fun batch_balance_of(token: &LightCMTAT, accounts: vector<address>): vector<u64> {
-        base::batch_balance_of(&token.balances, accounts)
+    /// Note: batch_balance_of is now handled by querying multiple Coin<CMTAT> objects
+    public fun batch_balance_of(_token: &LightCMTAT, _accounts: vector<address>): vector<u64> {
+        vector::empty()  // Balances are in Coin<CMTAT> objects owned by users
     }
 
     public fun terms(token: &LightCMTAT): String {
@@ -136,16 +152,16 @@ module move_cmtat::light_cmtat {
         base::token_id(&token.token_info)
     }
 
-    public fun paused(token: &LightCMTAT): bool {
-        pause::is_paused(&token.pause_state)
+    public fun paused(compliance_state: &ComplianceState): bool {
+        pause::is_paused(&compliance_state.pause_state)
     }
 
-    public fun deactivated(token: &LightCMTAT): bool {
-        pause::is_deactivated(&token.pause_state)
+    public fun deactivated(compliance_state: &ComplianceState): bool {
+        pause::is_deactivated(&compliance_state.pause_state)
     }
 
-    public fun is_frozen(token: &LightCMTAT, account: address): bool {
-        freeze::is_frozen(&token.freeze_state, account)
+    public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
+        freeze::is_frozen(&compliance_state.freeze_state, account)
     }
 
     // ============ Role Getters (matching Cairo ABI) ============
@@ -169,58 +185,56 @@ module move_cmtat::light_cmtat {
     // ============ Administrative Functions ============
 
     public entry fun set_terms(
+        _admin_cap: &AdminCap,
         token: &mut LightCMTAT,
-        new_terms: String,
-        ctx: &TxContext
+        new_terms: String
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
         base::set_terms(&mut token.token_info, new_terms);
     }
 
     public entry fun set_information(
+        _admin_cap: &AdminCap,
         token: &mut LightCMTAT,
-        new_info: String,
-        ctx: &TxContext
+        new_info: String
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
         base::set_information(&mut token.token_info, new_info);
     }
 
     public entry fun set_token_id(
+        _admin_cap: &AdminCap,
         token: &mut LightCMTAT,
-        new_id: String,
-        ctx: &TxContext
+        new_id: String
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
         base::set_token_id(&mut token.token_info, new_id);
     }
 
     // ============ Minting Functions ============
 
     public entry fun mint(
+        mint_cap: &MintCap,
         token: &mut LightCMTAT,
+        compliance_state: &ComplianceState,
         to: address,
         amount: u64,
-        ctx: &TxContext
+        ctx: &mut TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, to);
+        pause::require_not_paused(&compliance_state.pause_state);
+        freeze::require_not_frozen(&compliance_state.freeze_state, to);
 
-        let current_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, current_balance + amount);
-        base::increase_total_supply(&mut token.token_info, amount);
+        let coins = base::mint(&mut token.treasury_cap, amount, ctx);
+        base::transfer_coin(coins, to);
     }
 
     public entry fun batch_mint(
+        mint_cap: &MintCap,
         token: &mut LightCMTAT,
+        compliance_state: &ComplianceState,
         recipients: vector<address>,
         amounts: vector<u64>,
-        ctx: &TxContext
+        ctx: &mut TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        
+        pause::require_not_paused(&compliance_state.pause_state);
+
         let i = 0;
         let len = vector::length(&recipients);
         assert!(len == vector::length(&amounts), EInvalidAmount);
@@ -228,178 +242,104 @@ module move_cmtat::light_cmtat {
         while (i < len) {
             let recipient = *vector::borrow(&recipients, i);
             let amount = *vector::borrow(&amounts, i);
-            
-            freeze::require_not_frozen(&token.freeze_state, recipient);
-            let current_balance = base::balance_of(&token.balances, recipient);
-            base::update_balance(&mut token.balances, recipient, current_balance + amount);
-            base::increase_total_supply(&mut token.token_info, amount);
-            
+
+            freeze::require_not_frozen(&compliance_state.freeze_state, recipient);
+            let coins = base::mint(&mut token.treasury_cap, amount, ctx);
+            base::transfer_coin(coins, recipient);
+
             i = i + 1;
         }
     }
 
     // ============ Burning Functions ============
 
+    /// Burn coins provided by the user
     public entry fun burn(
         token: &mut LightCMTAT,
-        amount: u64,
-        ctx: &TxContext
+        coins: Coin<base::CMTAT>,
+        compliance_state: &ComplianceState
     ) {
-        let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        
-        let balance = base::balance_of(&token.balances, sender);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, sender, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
+        pause::require_not_paused(&compliance_state.pause_state);
+        base::burn(&mut token.treasury_cap, coins);
     }
 
-    public entry fun burn_from(
-        token: &mut LightCMTAT,
-        from: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
+    /// Note: burn_from (forced burn) is not supported in IOTA's object model
+    /// Users must voluntarily burn their own coins
+    /// For regulatory compliance, implement "burn_and_mint" pattern or freeze mechanism
 
-        let balance = base::balance_of(&token.balances, from);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
-
-    public entry fun batch_burn(
-        token: &mut LightCMTAT,
-        accounts: vector<address>,
-        amounts: vector<u64>,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        
-        let i = 0;
-        let len = vector::length(&accounts);
-        assert!(len == vector::length(&amounts), EInvalidAmount);
-        
-        while (i < len) {
-            let account = *vector::borrow(&accounts, i);
-            let amount = *vector::borrow(&amounts, i);
-            
-            let balance = base::balance_of(&token.balances, account);
-            assert!(balance >= amount, EInsufficientBalance);
-            
-            base::update_balance(&mut token.balances, account, balance - amount);
-            base::decrease_total_supply(&mut token.token_info, amount);
-            
-            i = i + 1;
-        }
-    }
-
-    public entry fun forced_burn(
-        token: &mut LightCMTAT,
-        from: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-
-        let balance = base::balance_of(&token.balances, from);
-        assert!(balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, balance - amount);
-        base::decrease_total_supply(&mut token.token_info, amount);
-    }
-
-    public entry fun burn_and_mint(
-        token: &mut LightCMTAT,
-        from: address,
-        to: address,
-        amount: u64,
-        ctx: &TxContext
-    ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, to);
-        
-        let from_balance = base::balance_of(&token.balances, from);
-        assert!(from_balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, from, from_balance - amount);
-        
-        let to_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, to_balance + amount);
-    }
+    /// Note: batch_burn, forced_burn, and burn_and_mint removed
+    /// In Coin<T> architecture, users voluntarily burn their own coins
+    /// For regulatory scenarios, implement freeze + voluntary redemption pattern
 
     // ============ Pause Functions ============
 
     public entry fun pause(
-        token: &mut LightCMTAT,
-        ctx: &TxContext
+        _pause_cap: &PauseCap,
+        compliance_state: &mut ComplianceState
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
-        pause::pause(&mut token.pause_state);
+        pause::pause(&mut compliance_state.pause_state);
     }
 
     public entry fun unpause(
-        token: &mut LightCMTAT,
-        ctx: &TxContext
+        _pause_cap: &PauseCap,
+        compliance_state: &mut ComplianceState
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::pauser_role());
-        pause::unpause(&mut token.pause_state);
+        pause::unpause(&mut compliance_state.pause_state);
     }
 
     public entry fun deactivate_contract(
-        token: &mut LightCMTAT,
-        ctx: &TxContext
+        _admin_cap: &AdminCap,
+        compliance_state: &mut ComplianceState
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::default_admin_role());
-        pause::deactivate(&mut token.pause_state);
+        pause::deactivate(&mut compliance_state.pause_state);
     }
 
     // ============ Freeze Functions ============
 
     public entry fun set_address_frozen(
-        token: &mut LightCMTAT,
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
         account: address,
-        frozen: bool,
-        ctx: &TxContext
+        frozen: bool
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        freeze::set_address_frozen(&mut token.freeze_state, account, frozen);
+        freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
     }
 
     public entry fun batch_set_address_frozen(
-        token: &mut LightCMTAT,
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
         accounts: vector<address>,
-        statuses: vector<bool>,
-        ctx: &TxContext
+        statuses: vector<bool>
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::enforcer_role());
-        freeze::batch_set_address_frozen(&mut token.freeze_state, accounts, statuses);
+        freeze::batch_set_address_frozen(&mut compliance_state.freeze_state, accounts, statuses);
     }
 
     // ============ Transfer Functions ============
 
+    /// Transfer function with CMTAT compliance validation
+    /// Users call this to transfer their Coin<CMTAT> with regulatory checks
     public entry fun transfer(
-        token: &mut LightCMTAT,
+        compliance_state: &ComplianceState,
+        coins: Coin<base::CMTAT>,
         to: address,
-        amount: u64,
         ctx: &TxContext
     ) {
-        let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, sender);
-        freeze::require_not_frozen(&token.freeze_state, to);
+        let from = tx_context::sender(ctx);
+        let amount = base::coin_value(&coins);
 
-        let sender_balance = base::balance_of(&token.balances, sender);
-        assert!(sender_balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, sender, sender_balance - amount);
-        
-        let to_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, to_balance + amount);
+        // Validate transfer using rule engine
+        let restriction_code = rule_engine::validate_transfer(
+            &compliance_state.pause_state,
+            &compliance_state.freeze_state,
+            from,
+            to,
+            amount,
+            amount  // from_balance is the coin value being transferred
+        );
+
+        assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
+
+        // Transfer the coins
+        base::transfer_coin(coins, to);
     }
 }

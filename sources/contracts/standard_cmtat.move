@@ -23,23 +23,30 @@ module move_cmtat::standard_cmtat {
     const EInvalidAmount: u64 = 4002;
     const ETransferRestricted: u64 = 4003;
 
-    /// Standard CMTAT Token
-    public struct StandardCMTAT has key, store {
+    /// Standard CMTAT Token shared object
+    public struct StandardCMTAT has key {
         id: UID,
         token_info: base::TokenInfo,
-        balances: base::Balances,
-        pause_state: pause::PauseState,
-        freeze_state: freeze::FreezeState,
+        treasury_cap: TreasuryCap<base::CMTAT>,
         rule_engine: rule_engine::RuleEngine,
         snapshot_engine: snapshot_engine::SnapshotEngine,
-        roles: Table<address, vector<vector<u8>>>,  // address -> list of roles
         document_uri: String,
     }
 
-    /// Admin capability
-    public struct AdminCap has key, store {
+    /// Shared compliance state object
+    public struct ComplianceState has key {
         id: UID,
+        pause_state: pause::PauseState,
+        freeze_state: freeze::FreezeState,
     }
+
+    /// Capability structs for access control
+    public struct AdminCap has key, store { id: UID }
+    public struct MintCap has key, store { id: UID }
+    public struct BurnCap has key, store { id: UID }
+    public struct FreezeCap has key, store { id: UID }
+    public struct PauseCap has key, store { id: UID }
+    public struct SnapshotCap has key, store { id: UID }
 
     /// Initialize Standard CMTAT
     public entry fun init_token(
@@ -358,33 +365,31 @@ module move_cmtat::standard_cmtat {
 
     // ============ Transfer Functions with Validation ============
 
+    /// Transfer function with CMTAT compliance validation
     public entry fun transfer(
-        token: &mut StandardCMTAT,
+        compliance_state: &ComplianceState,
+        coins: Coin<base::CMTAT>,
         to: address,
-        amount: u64,
         ctx: &TxContext
     ) {
-        let sender = tx_context::sender(ctx);
-        
+        let from = tx_context::sender(ctx);
+        let amount = base::coin_value(&coins);
+
         // Validate transfer using rule engine
-        let sender_balance = base::balance_of(&token.balances, sender);
         let restriction_code = rule_engine::validate_transfer(
-            &token.pause_state,
-            &token.freeze_state,
-            sender,
+            &compliance_state.pause_state,
+            &compliance_state.freeze_state,
+            from,
             to,
             amount,
-            sender_balance
+            amount  // from_balance is the coin value being transferred
         );
-        
+
         // Require valid transfer
         rule_engine::require_valid_transfer(restriction_code);
-        
-        // Execute transfer
-        base::update_balance(&mut token.balances, sender, sender_balance - amount);
-        
-        let to_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, to_balance + amount);
+
+        // Transfer the coins
+        base::transfer_coin(coins, to);
     }
 
     /// Transfer with explicit validation check

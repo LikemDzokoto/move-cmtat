@@ -1,18 +1,19 @@
-/// Allowlist CMTAT - CMTAT with Allowlist Functionality
+/// Allowlist CMTAT - CMTAT with Allowlist Functionality using IOTA Native Tokens
 /// All Light features plus allowlist control and partial token freezing
-/// Implements 9 roles for comprehensive access control
+/// Uses capability-based access control and Coin<CMTAT> architecture
 module move_cmtat::allowlist_cmtat {
     use std::string::String;
     use iota::object::{Self, UID};
     use iota::tx_context::{Self, TxContext};
     use iota::transfer;
-    use iota::table::{Self, Table};
+    use iota::coin::{Self, Coin, TreasuryCap};
     use iota::clock::{Self, Clock};
-    
+
     use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
     use move_cmtat::allowlist;
+    use move_cmtat::rule_engine;
     use move_cmtat::snapshot_engine;
     use move_cmtat::icmtat;
 
@@ -20,26 +21,35 @@ module move_cmtat::allowlist_cmtat {
     const EUnauthorized: u64 = 2000;
     const EInsufficientBalance: u64 = 2001;
     const EInvalidAmount: u64 = 2002;
+    const ETransferRestricted: u64 = 2003;
 
-    /// Allowlist CMTAT Token
-    public struct AllowlistCMTAT has key, store {
+    /// Allowlist CMTAT Token shared object
+    public struct AllowlistCMTAT has key {
         id: UID,
         token_info: base::TokenInfo,
-        balances: base::Balances,
-        pause_state: pause::PauseState,
-        freeze_state: freeze::FreezeState,
-        allowlist_state: allowlist::AllowlistState,
+        treasury_cap: TreasuryCap<base::CMTAT>,
         snapshot_engine: snapshot_engine::SnapshotEngine,
-        roles: Table<address, vector<vector<u8>>>,  // address -> list of roles
         document_uri: String,
     }
 
-    /// Admin capability
-    public struct AdminCap has key, store {
+    /// Shared compliance state object
+    public struct ComplianceState has key {
         id: UID,
+        pause_state: pause::PauseState,
+        freeze_state: freeze::FreezeState,
+        allowlist_state: allowlist::AllowlistState,
     }
 
-    /// Initialize Allowlist CMTAT
+    /// Capability structs for access control
+    public struct AdminCap has key, store { id: UID }
+    public struct MintCap has key, store { id: UID }
+    public struct BurnCap has key, store { id: UID }
+    public struct FreezeCap has key, store { id: UID }
+    public struct PauseCap has key, store { id: UID }
+    public struct AllowlistCap has key, store { id: UID }
+    public struct SnapshotCap has key, store { id: UID }
+
+    /// Initialize Allowlist CMTAT with native IOTA token architecture
     public entry fun init_token(
         name: String,
         symbol: String,
@@ -48,42 +58,65 @@ module move_cmtat::allowlist_cmtat {
         recipient: address,
         ctx: &mut TxContext
     ) {
+        // Create token metadata
+        let token_info = base::init_token_info(name, symbol, decimals, ctx);
+
+        // Create treasury cap
+        let treasury_cap = base::create_treasury_cap(ctx);
+
+        // Mint initial supply if specified
+        let initial_coins = if (initial_supply > 0) {
+            base::mint(&mut treasury_cap, initial_supply, ctx)
+        } else {
+            coin::zero<base::CMTAT>(ctx)
+        };
+
+        // Create token object
         let token = AllowlistCMTAT {
             id: object::new(ctx),
-            token_info: base::init_token_info(name, symbol, decimals, ctx),
-            balances: base::init_balances(ctx),
-            pause_state: pause::init_pause_state(ctx),
-            freeze_state: freeze::init_freeze_state(ctx),
-            allowlist_state: allowlist::init_allowlist_state(ctx),
+            token_info,
+            treasury_cap,
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
-            roles: table::new(ctx),
             document_uri: std::string::utf8(b""),
         };
 
-        // Mint initial supply to recipient
-        if (initial_supply > 0) {
-            base::update_balance(&mut token.balances, recipient, initial_supply);
-            base::increase_total_supply(&mut token.token_info, initial_supply);
-        };
-
-        // Grant all roles to admin
-        let admin = tx_context::sender(ctx);
-        grant_role_internal(&mut token, admin, icmtat::default_admin_role());
-        grant_role_internal(&mut token, admin, icmtat::minter_role());
-        grant_role_internal(&mut token, admin, icmtat::pauser_role());
-        grant_role_internal(&mut token, admin, icmtat::enforcer_role());
-        grant_role_internal(&mut token, admin, icmtat::erc20enforcer_role());
-        grant_role_internal(&mut token, admin, icmtat::snapshooter_role());
-        grant_role_internal(&mut token, admin, icmtat::document_role());
-        grant_role_internal(&mut token, admin, icmtat::extra_information_role());
-
-        // Create and transfer admin capability
-        let admin_cap = AdminCap {
+        // Create compliance state
+        let compliance_state = ComplianceState {
             id: object::new(ctx),
+            pause_state: pause::init_pause_state(ctx),
+            freeze_state: freeze::init_freeze_state(ctx),
+            allowlist_state: allowlist::init_allowlist_state(ctx),
         };
 
+        // Create capability objects
+        let admin = tx_context::sender(ctx);
+        let admin_cap = AdminCap { id: object::new(ctx) };
+        let mint_cap = MintCap { id: object::new(ctx) };
+        let burn_cap = BurnCap { id: object::new(ctx) };
+        let freeze_cap = FreezeCap { id: object::new(ctx) };
+        let pause_cap = PauseCap { id: object::new(ctx) };
+        let allowlist_cap = AllowlistCap { id: object::new(ctx) };
+        let snapshot_cap = SnapshotCap { id: object::new(ctx) };
+
+        // Share objects
         transfer::share_object(token);
+        transfer::share_object(compliance_state);
+
+        // Transfer capabilities to admin
         transfer::transfer(admin_cap, admin);
+        transfer::transfer(mint_cap, admin);
+        transfer::transfer(burn_cap, admin);
+        transfer::transfer(freeze_cap, admin);
+        transfer::transfer(pause_cap, admin);
+        transfer::transfer(allowlist_cap, admin);
+        transfer::transfer(snapshot_cap, admin);
+
+        // Transfer initial coins to recipient
+        if (initial_supply > 0) {
+            transfer::transfer(initial_coins, recipient);
+        } else {
+            base::destroy_zero_coin(initial_coins);
+        }
     }
 
     // ============ Role Management ============
@@ -135,16 +168,16 @@ module move_cmtat::allowlist_cmtat {
         freeze::get_active_balance(total_balance, &token.freeze_state, account)
     }
 
-    public fun paused(token: &AllowlistCMTAT): bool {
-        pause::is_paused(&token.pause_state)
+    public fun paused(compliance_state: &ComplianceState): bool {
+        pause::is_paused(&compliance_state.pause_state)
     }
 
-    public fun is_frozen(token: &AllowlistCMTAT, account: address): bool {
-        freeze::is_frozen(&token.freeze_state, account)
+    public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
+        freeze::is_frozen(&compliance_state.freeze_state, account)
     }
 
-    public fun is_allowlisted(token: &AllowlistCMTAT, account: address): bool {
-        allowlist::is_allowlisted(&token.allowlist_state, account)
+    public fun is_allowlisted(compliance_state: &ComplianceState, account: address): bool {
+        allowlist::is_allowlisted(&compliance_state.allowlist_state, account)
     }
 
     public fun allowlist_enabled(token: &AllowlistCMTAT): bool {
@@ -196,19 +229,19 @@ module move_cmtat::allowlist_cmtat {
     // ============ Minting Functions ============
 
     public entry fun mint(
+        _mint_cap: &MintCap,
         token: &mut AllowlistCMTAT,
+        compliance_state: &ComplianceState,
         to: address,
         amount: u64,
-        ctx: &TxContext
+        ctx: &mut TxContext
     ) {
-        require_role(token, tx_context::sender(ctx), icmtat::minter_role());
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, to);
-        allowlist::require_allowlisted(&token.allowlist_state, to);
+        pause::require_not_paused(&compliance_state.pause_state);
+        freeze::require_not_frozen(&compliance_state.freeze_state, to);
+        allowlist::require_allowlisted(&compliance_state.allowlist_state, to);
 
-        let current_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, current_balance + amount);
-        base::increase_total_supply(&mut token.token_info, amount);
+        let coins = base::mint(&mut token.treasury_cap, amount, ctx);
+        base::transfer_coin(coins, to);
     }
 
     public entry fun batch_mint(
@@ -370,25 +403,30 @@ module move_cmtat::allowlist_cmtat {
 
     // ============ Transfer Functions ============
 
+    /// Transfer function with CMTAT compliance validation including allowlist
     public entry fun transfer(
-        token: &mut AllowlistCMTAT,
+        compliance_state: &ComplianceState,
+        coins: Coin<base::CMTAT>,
         to: address,
-        amount: u64,
         ctx: &TxContext
     ) {
-        let sender = tx_context::sender(ctx);
-        pause::require_not_paused(&token.pause_state);
-        freeze::require_not_frozen(&token.freeze_state, sender);
-        freeze::require_not_frozen(&token.freeze_state, to);
-        allowlist::require_both_allowlisted(&token.allowlist_state, sender, to);
+        let from = tx_context::sender(ctx);
+        let amount = base::coin_value(&coins);
 
-        let sender_balance = base::balance_of(&token.balances, sender);
-        let active_balance = freeze::get_active_balance(sender_balance, &token.freeze_state, sender);
-        assert!(active_balance >= amount, EInsufficientBalance);
-        
-        base::update_balance(&mut token.balances, sender, sender_balance - amount);
-        
-        let to_balance = base::balance_of(&token.balances, to);
-        base::update_balance(&mut token.balances, to, to_balance + amount);
+        // Validate transfer using rule engine with allowlist
+        let restriction_code = rule_engine::validate_transfer_with_allowlist(
+            &compliance_state.pause_state,
+            &compliance_state.freeze_state,
+            &compliance_state.allowlist_state,
+            from,
+            to,
+            amount,
+            amount  // from_balance is the coin value being transferred
+        );
+
+        assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
+
+        // Transfer the coins
+        base::transfer_coin(coins, to);
     }
 }

@@ -1,10 +1,12 @@
 /// Snapshot Engine - Balance Snapshots
 /// Provides historical balance tracking for compliance and reporting
+/// Note: In Coin<T> architecture, balances are recorded at snapshot time via events or explicit recording
 module move_cmtat::snapshot_engine {
     use iota::object::{Self, UID};
     use iota::tx_context::TxContext;
     use iota::table::{Self, Table};
     use iota::vec_map::{Self, VecMap};
+    use iota::event;
 
     /// Errors
     const ESnapshotNotFound: u64 = 700;
@@ -15,6 +17,20 @@ module move_cmtat::snapshot_engine {
         snapshot_id: u64,
         timestamp: u64,
         total_supply: u64,
+    }
+
+    /// Event emitted when a snapshot is created
+    public struct SnapshotCreated has copy, drop {
+        snapshot_id: u64,
+        timestamp: u64,
+        total_supply: u64,
+    }
+
+    /// Event emitted when a balance is recorded in a snapshot
+    public struct BalanceRecorded has copy, drop {
+        snapshot_id: u64,
+        account: address,
+        balance: u64,
     }
 
     /// Snapshot engine state
@@ -52,9 +68,16 @@ module move_cmtat::snapshot_engine {
         };
 
         vec_map::insert(&mut engine.snapshots, snapshot_id, snapshot);
-        
+
         // Initialize empty balance table for this snapshot
         table::add(&mut engine.balances, snapshot_id, table::new(ctx));
+
+        // Emit snapshot creation event
+        event::emit(SnapshotCreated {
+            snapshot_id,
+            timestamp,
+            total_supply,
+        });
 
         snapshot_id
     }
@@ -67,15 +90,22 @@ module move_cmtat::snapshot_engine {
         balance: u64
     ) {
         assert!(snapshot_id <= engine.current_snapshot_id, EInvalidSnapshotId);
-        
+
         let balances = table::borrow_mut(&mut engine.balances, snapshot_id);
-        
+
         if (table::contains(balances, account)) {
             let balance_ref = table::borrow_mut(balances, account);
             *balance_ref = balance;
         } else {
             table::add(balances, account, balance);
         }
+
+        // Emit balance recording event
+        event::emit(BalanceRecorded {
+            snapshot_id,
+            account,
+            balance,
+        });
     }
 
     /// Batch record balances in snapshot
