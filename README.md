@@ -436,14 +436,14 @@ public fun mint(
 
 ## Features
 
-✅ **CMTAT Framework Implementation** with IOTA-native architecture
-✅ **Four Module Variants** - Light, Allowlist, Debt, and Standard implementations
-✅ **Built on Coin<T>** - Leverages IOTA's native token standard
-✅ **Capability-Based Access Control** - AdminCap, MintCap, BurnCap, etc.
-✅ **Modular Components** - Pause, Freeze, Allowlist, Validation as separate objects
-✅ **Batch Operations** for efficient multi-address operations
-✅ **Transfer Validation** (ERC-1404 compatible) via RuleEngine
-✅ **VM-Enforced Security** - TreasuryCap, Coin<T> ownership model
+- ✅ **CMTAT Framework Implementation** with IOTA-native architecture
+- ✅ **Four Module Variants** - Light, Allowlist, Debt, and Standard implementations
+- ✅ **Built on Coin<T>** - Leverages IOTA's native token standard
+- ✅ **Capability-Based Access Control** - AdminCap, MintCap, BurnCap, etc.
+- ✅ **Modular Components** - Pause, Freeze, Allowlist, Validation as separate objects
+- ✅ **Batch Operations** for efficient multi-address operations
+- ✅ **Transfer Validation** (ERC-1404 compatible) via RuleEngine
+- ✅ **VM-Enforced Security** - TreasuryCap, Coin<T> ownership model
 
 ---
 
