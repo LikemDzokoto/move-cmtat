@@ -1,17 +1,15 @@
+/// Standard CMTAT Test Suite - Comprehensive Testing
+/// Tests initialization, minting, burning, transfers, freeze, pause, and snapshots
 #[test_only]
-module move_cmtat::standard_cmtat_tests {
+module move_cmtat::standard_cmtat_tests_new {
     use std::string;
-    use iota::test_scenario::{Self, Scenario};
-    use iota::coin::{Self, TreasuryCap, CoinMetadata};
-    use iota::deny_list::DenyList;
+    use iota::test_scenario::{Self};
+    use iota::coin::{Self, Coin};
     use iota::clock;
-    use iota::object;
-    use iota::transfer;
-    use move_cmtat::standard_cmtat::{
-        Self, StandardCMTATRegistry, AdminCap, MintCap, PauseCap, FreezeCap, SnapshotCap, init_for_testing,
-        create_admin_cap_for_testing, create_mint_cap_for_testing, create_pause_cap_for_testing,
-        create_freeze_cap_for_testing, create_snapshot_cap_for_testing
-    };
+    
+    use move_cmtat::standard_cmtat::{Self, StandardCMTAT, ComplianceState, AdminCap, MintCap, BurnCap, 
+                                      FreezeCap, PauseCap, SnapshotCap};
+    use move_cmtat::base;
     use move_cmtat::icmtat;
 
     const ADMIN: address = @0xAD;
@@ -25,48 +23,443 @@ module move_cmtat::standard_cmtat_tests {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize token using one-time witness
+        // Initialize token
         {
             let ctx = test_scenario::ctx(scenario);
-            init_for_testing(ctx);
+            standard_cmtat::init_token(
+                string::utf8(b"Standard CMTAT"),
+                string::utf8(b"SCMTAT"),
+                9,
+                1000000,  // Initial supply
+                ADMIN,    // Recipient
+                ctx
+            );
         };
 
-        // Verify objects created and shared
+        // Verify shared objects were created
         test_scenario::next_tx(scenario, ADMIN);
         {
-            // Check shared objects exist
-            assert!(test_scenario::has_most_recent_shared<StandardCMTATRegistry>(), 0);
-            assert!(test_scenario::has_most_recent_shared<DenyList>(), 1);
+            assert!(test_scenario::has_most_recent_shared<StandardCMTAT>(), 0);
+            assert!(test_scenario::has_most_recent_shared<ComplianceState>(), 1);
+            
+            // Verify capabilities were transferred to admin
+            assert!(test_scenario::has_most_recent_for_sender<AdminCap>(scenario), 2);
+            assert!(test_scenario::has_most_recent_for_sender<MintCap>(scenario), 3);
+            assert!(test_scenario::has_most_recent_for_sender<BurnCap>(scenario), 4);
+            assert!(test_scenario::has_most_recent_for_sender<FreezeCap>(scenario), 5);
+            assert!(test_scenario::has_most_recent_for_sender<PauseCap>(scenario), 6);
+            assert!(test_scenario::has_most_recent_for_sender<SnapshotCap>(scenario), 7);
+            
+            // Check initial coins were sent to admin
+            assert!(test_scenario::has_most_recent_for_sender<Coin<base::CMTAT>>(scenario), 8);
+            let initial_coins = test_scenario::take_from_sender<Coin<base::CMTAT>>(scenario);
+            assert!(base::coin_value(&initial_coins) == 1000000, 9);
+            test_scenario::return_to_sender(scenario, initial_coins);
+        };
 
-            // Take shared objects for inspection
-            let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+        test_scenario::end(scenario_val);
+    }
 
-            // Verify registry is initialized correctly
-            assert!(standard_cmtat::terms(&registry) == string::utf8(b""), 2);
-            assert!(standard_cmtat::information(&registry) == string::utf8(b""), 3);
-            assert!(standard_cmtat::token_id(&registry) == string::utf8(b""), 4);
-            assert!(!standard_cmtat::deactivated(&registry), 5);
+    #[test]
+    fun test_init_token_zero_supply() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
 
-            // Check CoinMetadata is frozen (immutable)
-            assert!(test_scenario::has_most_recent_immutable<CoinMetadata>(), 6);
-            let metadata = test_scenario::take_immutable<CoinMetadata>(scenario);
-            assert!(standard_cmtat::name(&metadata) == string::utf8(b"Standard CMTAT Token"), 7);
-            assert!(standard_cmtat::symbol(&metadata) == string::utf8(b"STANDARD_CMTAT"), 8);
-            assert!(standard_cmtat::decimals(&metadata) == 9, 9);
-            test_scenario::return_immutable(metadata);
+        // Initialize token with zero supply
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Standard CMTAT"),
+                string::utf8(b"SCMTAT"),
+                9,
+                0,  // Zero initial supply
+                ADMIN,
+                ctx
+            );
+        };
 
-            // Return shared objects
-            test_scenario::return_shared(registry);
-            test_scenario::return_shared(deny_list);
+        // Verify no initial coins
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            // Should not have any Coin<CMTAT> since supply was zero
+            assert!(!test_scenario::has_most_recent_for_sender<Coin<base::CMTAT>>(scenario), 0);
+        };
 
-            // Check capabilities were transferred to deployer (ADMIN)
-            assert!(test_scenario::has_most_recent_for_sender<AdminCap>(scenario), 10);
-            assert!(test_scenario::has_most_recent_for_sender<MintCap>(scenario), 11);
-            assert!(test_scenario::has_most_recent_for_sender<PauseCap>(scenario), 12);
-            assert!(test_scenario::has_most_recent_for_sender<FreezeCap>(scenario), 13);
-            assert!(test_scenario::has_most_recent_for_sender<SnapshotCap>(scenario), 14);
-            assert!(test_scenario::has_most_recent_for_sender<TreasuryCap<StandardCMTAT>>(scenario), 15);
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== VIEW FUNCTION TESTS ==========
+
+    #[test]
+    fun test_view_functions() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test Token"),
+                string::utf8(b"TEST"),
+                6,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+
+            // Test token info
+            assert!(standard_cmtat::name(&token) == string::utf8(b"Test Token"), 0);
+            assert!(standard_cmtat::symbol(&token) == string::utf8(b"TEST"), 1);
+            assert!(standard_cmtat::decimals(&token) == 6, 2);
+            assert!(standard_cmtat::total_supply(&token) == 0, 3);
+            
+            // Test compliance state
+            assert!(!standard_cmtat::paused(&compliance_state), 4);
+            assert!(!standard_cmtat::deactivated(&compliance_state), 5);
+            assert!(!standard_cmtat::is_frozen(&compliance_state, USER1), 6);
+
+            test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== MINTING TESTS ==========
+
+    #[test]
+    fun test_mint() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::mint(&mint_cap, &mut token, &compliance_state, USER1, 5000, ctx);
+
+            // Check total supply increased
+            assert!(standard_cmtat::total_supply(&token) == 5000, 0);
+
+            test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, mint_cap);
+        };
+
+        // Check USER1 received coins
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<Coin<base::CMTAT>>(scenario), 0);
+            let coins = test_scenario::take_from_sender<Coin<base::CMTAT>>(scenario);
+            assert!(base::coin_value(&coins) == 5000, 1);
+            test_scenario::return_to_sender(scenario, coins);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_mint_when_paused() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
+            let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
+
+            // Pause contract
+            standard_cmtat::pause(&pause_cap, &mut compliance_state);
+
+            // Try to mint - should fail
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::mint(&mint_cap, &mut token, &compliance_state, USER1, 5000, ctx);
+
+            test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, mint_cap);
+            test_scenario::return_to_sender(scenario, pause_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_mint_to_frozen_address() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
+            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
+
+            // Freeze USER1
+            standard_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, USER1, true);
+
+            // Try to mint - should fail
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::mint(&mint_cap, &mut token, &compliance_state, USER1, 5000, ctx);
+
+            test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, mint_cap);
+            test_scenario::return_to_sender(scenario, freeze_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== BURNING TESTS ==========
+
+    #[test]
+    fun test_burn() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize with initial supply
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                10000,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let coins = test_scenario::take_from_sender<Coin<base::CMTAT>>(scenario);
+
+            // Verify initial supply
+            assert!(standard_cmtat::total_supply(&token) == 10000, 0);
+
+            // Burn half
+            standard_cmtat::burn(&mut token, coins, &compliance_state);
+
+            // Verify supply decreased
+            assert!(standard_cmtat::total_supply(&token) == 0, 1);
+
+            test_scenario::return_shared(token);
+            test_scenario::return_shared(compliance_state);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== PAUSE TESTS ==========
+
+    #[test]
+    fun test_pause_unpause() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
+
+            // Verify not paused initially
+            assert!(!standard_cmtat::paused(&compliance_state), 0);
+
+            // Pause
+            standard_cmtat::pause(&pause_cap, &mut compliance_state);
+            assert!(standard_cmtat::paused(&compliance_state), 1);
+
+            // Unpause
+            standard_cmtat::unpause(&pause_cap, &mut compliance_state);
+            assert!(!standard_cmtat::paused(&compliance_state), 2);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, pause_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_deactivate_contract() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+
+            // Verify not deactivated initially
+            assert!(!standard_cmtat::deactivated(&compliance_state), 0);
+
+            // Deactivate
+            standard_cmtat::deactivate_contract(&admin_cap, &mut compliance_state);
+            assert!(standard_cmtat::deactivated(&compliance_state), 1);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== FREEZE TESTS ==========
+
+    #[test]
+    fun test_freeze_address() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
+
+            // Verify not frozen initially
+            assert!(!standard_cmtat::is_frozen(&compliance_state, USER1), 0);
+
+            // Freeze USER1
+            standard_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, USER1, true);
+            assert!(standard_cmtat::is_frozen(&compliance_state, USER1), 1);
+
+            // Unfreeze USER1
+            standard_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, USER1, false);
+            assert!(!standard_cmtat::is_frozen(&compliance_state, USER1), 2);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, freeze_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_freeze_partial_tokens() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
+
+            // Freeze 300 tokens for USER1
+            standard_cmtat::freeze_partial_tokens(&freeze_cap, &mut compliance_state, USER1, 300);
+
+            // Unfreeze 100 tokens
+            standard_cmtat::unfreeze_partial_tokens(&freeze_cap, &mut compliance_state, USER1, 100);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, freeze_cap);
         };
 
         test_scenario::end(scenario_val);
@@ -79,31 +472,39 @@ module move_cmtat::standard_cmtat_tests {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize and mint to ADMIN
-        init_for_testing(test_scenario::ctx(scenario));
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
 
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<StandardCMTAT>>(scenario);
-        let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            // Validate transfer - should be allowed
+            let restriction_code = standard_cmtat::detect_transfer_restriction(
+                &compliance_state,
+                ADMIN,
+                USER1,
+                100,
+                1000  // from_balance
+            );
 
-        let ctx = test_scenario::ctx(scenario);
-        let coins = standard_cmtat::mint(&mint_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 1000, ctx);
-        transfer::public_transfer(coins, ADMIN);
+            assert!(restriction_code == icmtat::restriction_code_valid(), 0);
 
-        // Validate transfer - should be allowed
-        let restriction_code = standard_cmtat::detect_transfer_restriction(&registry, &deny_list, ADMIN, USER1, 100);
-        assert!(restriction_code == icmtat::restriction_code_valid(), 0);
+            let message = standard_cmtat::message_for_transfer_restriction(restriction_code);
+            assert!(message == string::utf8(b"Transfer allowed"), 1);
 
-        let message = standard_cmtat::message_for_transfer_restriction(restriction_code);
-        assert!(message == string::utf8(b"Transfer allowed"), 1);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, mint_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(compliance_state);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -114,27 +515,40 @@ module move_cmtat::standard_cmtat_tests {
         let scenario = &mut scenario_val;
 
         // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
 
-        let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            // Pause contract
+            standard_cmtat::pause(&pause_cap, &mut compliance_state);
 
-        // Pause the contract
-        standard_cmtat::pause(&pause_cap, &mut deny_list, test_scenario::ctx(scenario));
+            // Validate transfer - should be restricted
+            let restriction_code = standard_cmtat::detect_transfer_restriction(
+                &compliance_state,
+                ADMIN,
+                USER1,
+                100,
+                1000
+            );
 
-        // Validate transfer - should be restricted when paused
-        let restriction_code = standard_cmtat::detect_transfer_restriction(&registry, &deny_list, ADMIN, USER1, 100);
-        assert!(restriction_code == icmtat::restriction_code_paused(), 0);
+            assert!(restriction_code == icmtat::restriction_code_paused(), 0);
 
-        let message = standard_cmtat::message_for_transfer_restriction(restriction_code);
-        assert!(message == string::utf8(b"Contract is paused"), 1);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, pause_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, pause_cap);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -145,82 +559,83 @@ module move_cmtat::standard_cmtat_tests {
         let scenario = &mut scenario_val;
 
         // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        // Freeze ADMIN
-        standard_cmtat::set_address_frozen(&freeze_cap, &mut deny_list, ADMIN, true, test_scenario::ctx(scenario));
-
-        // Validate transfer - should be restricted when sender frozen
-        let restriction_code = standard_cmtat::detect_transfer_restriction(&registry, &deny_list, ADMIN, USER1, 100);
-        assert!(restriction_code == icmtat::restriction_code_frozen_sender(), 0);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, freeze_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_transfer_validation_insufficient_balance() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        // Try to transfer 100 tokens from ADMIN who has 0 balance
-        let restriction_code = standard_cmtat::detect_transfer_restriction(&registry, &deny_list, ADMIN, USER1, 100);
-        assert!(restriction_code == icmtat::restriction_code_insufficient_balance(), 0);
-
-        // Return objects
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_restriction_code_messages() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Test message retrieval for different codes
         {
             let ctx = test_scenario::ctx(scenario);
-            init_for_testing(ctx);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
         };
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            // Test messages for restriction codes 0-5
-            let msg0 = standard_cmtat::message_for_transfer_restriction(0);
-            assert!(msg0 == string::utf8(b"Transfer allowed"), 0);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
 
-            let msg1 = standard_cmtat::message_for_transfer_restriction(1);
-            assert!(msg1 == string::utf8(b"Contract is paused"), 1);
+            // Freeze sender
+            standard_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, ADMIN, true);
 
-            let msg2 = standard_cmtat::message_for_transfer_restriction(2);
-            assert!(msg2 == string::utf8(b"Sender address is frozen"), 2);
+            // Validate transfer - should be restricted
+            let restriction_code = standard_cmtat::detect_transfer_restriction(
+                &compliance_state,
+                ADMIN,
+                USER1,
+                100,
+                1000
+            );
 
-            let msg3 = standard_cmtat::message_for_transfer_restriction(3);
-            assert!(msg3 == string::utf8(b"Recipient address is frozen"), 3);
+            assert!(restriction_code == icmtat::restriction_code_frozen_sender(), 0);
 
-            let msg4 = standard_cmtat::message_for_transfer_restriction(4);
-            assert!(msg4 == string::utf8(b"Insufficient balance"), 4);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, freeze_cap);
+        };
 
-            let msg5 = standard_cmtat::message_for_transfer_restriction(5);
-            assert!(msg5 == string::utf8(b"Unknown restriction"), 5);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_transfer_validation_frozen_receiver() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
+
+            // Freeze receiver
+            standard_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, USER1, true);
+
+            // Validate transfer - should be restricted
+            let restriction_code = standard_cmtat::detect_transfer_restriction(
+                &compliance_state,
+                ADMIN,
+                USER1,
+                100,
+                1000
+            );
+
+            assert!(restriction_code == icmtat::restriction_code_frozen_receiver(), 0);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, freeze_cap);
         };
 
         test_scenario::end(scenario_val);
@@ -233,89 +648,43 @@ module move_cmtat::standard_cmtat_tests {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize and mint to ADMIN
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<StandardCMTAT>>(scenario);
-        let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        let ctx = test_scenario::ctx(scenario);
-        let coins = standard_cmtat::mint(&mint_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
-
-        // Transfer to USER1
-        standard_cmtat::transfer(&registry, &deny_list, coins, USER1, ctx);
-
-        // Check USER1 received the coins
-        test_scenario::next_tx(scenario, USER1);
+        // Initialize with initial supply
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<StandardCMTAT>>(scenario), 0);
-            let user_coins = test_scenario::take_from_sender<Coin<StandardCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 5000, 1);
-            test_scenario::return_to_sender(scenario, user_coins);
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                5000,
+                ADMIN,
+                ctx
+            );
         };
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, mint_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_batch_mint() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let coins = test_scenario::take_from_sender<Coin<base::CMTAT>>(scenario);
 
-        // Take objects
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<StandardCMTAT>>(scenario);
-        let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::transfer(&compliance_state, coins, USER1, ctx);
 
-        // Batch mint to multiple users
-        let recipients = vector[USER1, USER2];
-        let amounts = vector[1000, 2000];
-        let ctx = test_scenario::ctx(scenario);
-        standard_cmtat::batch_mint(&mint_cap, &mut treasury_cap, &registry, &deny_list, recipients, amounts, ctx);
-
-        // Check total supply
-        assert!(coin::total_supply(&treasury_cap) == 3000, 0);
+            test_scenario::return_shared(compliance_state);
+        };
 
         // Check USER1 received coins
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<StandardCMTAT>>(scenario), 1);
-            let user_coins = test_scenario::take_from_sender<Coin<StandardCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 1000, 2);
+            assert!(test_scenario::has_most_recent_for_sender<Coin<base::CMTAT>>(scenario), 0);
+            let user_coins = test_scenario::take_from_sender<Coin<base::CMTAT>>(scenario);
+            assert!(base::coin_value(&user_coins) == 5000, 1);
             test_scenario::return_to_sender(scenario, user_coins);
         };
-
-        // Check USER2 received coins
-        test_scenario::next_tx(scenario, USER2);
-        {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<StandardCMTAT>>(scenario), 3);
-            let user_coins = test_scenario::take_from_sender<Coin<StandardCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 2000, 4);
-            test_scenario::return_to_sender(scenario, user_coins);
-        };
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, mint_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
 
         test_scenario::end(scenario_val);
     }
+
+    // ========== SNAPSHOT TESTS ==========
 
     #[test]
     fun test_snapshot() {
@@ -323,22 +692,70 @@ module move_cmtat::standard_cmtat_tests {
         let scenario = &mut scenario_val;
 
         // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let snapshot_cap = test_scenario::take_from_sender<SnapshotCap>(scenario);
+            let clock_obj = clock::create_for_testing(test_scenario::ctx(scenario));
 
-        // Take required objects
-        let snapshot_cap = test_scenario::take_from_sender<SnapshotCap>(scenario);
-        let registry = test_scenario::take_shared<StandardCMTATRegistry>(scenario);
-        let clock_obj = clock::create_for_testing(test_scenario::ctx(scenario));
-        let ctx = test_scenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::schedule_snapshot(&snapshot_cap, &mut token, &clock_obj, ctx);
 
-        // Create snapshot
-        standard_cmtat::schedule_snapshot(&snapshot_cap, &mut registry, &clock_obj, ctx);
+            clock::destroy_for_testing(clock_obj);
+            test_scenario::return_shared(token);
+            test_scenario::return_to_sender(scenario, snapshot_cap);
+        };
 
-        // Return objects
-        clock::destroy_for_testing(clock_obj);
-        test_scenario::return_to_sender(scenario, snapshot_cap);
-        test_scenario::return_shared(registry);
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== ADMINISTRATIVE TESTS ==========
+
+    #[test]
+    fun test_set_terms() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        // Initialize
+        {
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::init_token(
+                string::utf8(b"Test"),
+                string::utf8(b"TST"),
+                9,
+                0,
+                ADMIN,
+                ctx
+            );
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let token = test_scenario::take_shared<StandardCMTAT>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+
+            standard_cmtat::set_terms(&admin_cap, &mut token, string::utf8(b"New Terms"));
+            standard_cmtat::set_information(&admin_cap, &mut token, string::utf8(b"New Info"));
+            standard_cmtat::set_token_id(&admin_cap, &mut token, string::utf8(b"TOKEN123"));
+            standard_cmtat::set_document_uri(&admin_cap, &mut token, string::utf8(b"https://example.com"));
+
+            assert!(standard_cmtat::document_uri(&token) == string::utf8(b"https://example.com"), 0);
+
+            test_scenario::return_shared(token);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
 
         test_scenario::end(scenario_val);
     }

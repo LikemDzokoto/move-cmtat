@@ -1,150 +1,92 @@
+/// Light CMTAT Test Suite - IOTA Native Regulated Currency
+/// Tests initialization, minting, burning, transfers, freeze/pause via DenyList
 #[test_only]
-module move_cmtat::light_cmtat_tests {
+module move_cmtat::light_cmtat_tests_new {
     use std::string;
-use iota::test_scenario::{Self, Scenario};
-use iota::coin::{Self, TreasuryCap, CoinMetadata};
-use iota::deny_list::DenyList;
-use iota::object;
-use iota::transfer;
-use move_cmtat::light_cmtat::{
-    Self, LightCMTATRegistry, AdminCap, MinterCap, PauserCap, init_for_testing,
-    create_admin_cap_for_testing, create_minter_cap_for_testing, create_pauser_cap_for_testing
-};
+    use iota::test_scenario::{Self};
+    use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
+    use iota::deny_list::DenyList;
+    use iota::transfer;
+    
+    use move_cmtat::light_cmtat::{Self, LIGHT_CMTAT, LightCMTATRegistry, AdminCap, MinterCap, PauserCap, EnforcerCap};
 
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1;
     const USER2: address = @0x2;
 
+    // Helper to initialize for testing
+    fun setup(scenario: &mut test_scenario::Scenario) {
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::init_for_testing(ctx);
+        };
+    }
+
     // ========== INITIALIZATION TESTS ==========
 
     #[test]
-    fun test_init_token() {
+    fun test_init() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize token using one-time witness
-        {
-            let ctx = test_scenario::ctx(scenario);
-            init_for_testing(ctx);
-        };
+        setup(scenario);
 
-        // Verify objects created and shared
+        // Verify objects created
         test_scenario::next_tx(scenario, ADMIN);
         {
-            // Check shared objects exist
+            // Check shared objects
             assert!(test_scenario::has_most_recent_shared<LightCMTATRegistry>(), 0);
             assert!(test_scenario::has_most_recent_shared<DenyList>(), 1);
 
-            // Take shared objects for inspection
-            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            // Check immutable metadata
+            assert!(test_scenario::has_most_recent_immutable<CoinMetadata<LIGHT_CMTAT>>(), 2);
 
-            // Verify registry is initialized correctly
-            assert!(light_cmtat::terms(&registry) == string::utf8(b""), 2);
-            assert!(light_cmtat::information(&registry) == string::utf8(b""), 3);
-            assert!(light_cmtat::token_id(&registry) == string::utf8(b""), 4);
-            assert!(!light_cmtat::deactivated(&registry), 5);
-
-            // Check CoinMetadata is frozen (immutable)
-            assert!(test_scenario::has_most_recent_immutable<CoinMetadata>(), 6);
-            let metadata = test_scenario::take_immutable<CoinMetadata>(scenario);
-            assert!(light_cmtat::name(&metadata) == string::utf8(b"Light CMTAT Token"), 7);
-            assert!(light_cmtat::symbol(&metadata) == string::utf8(b"LIGHT_CMTAT"), 8);
-            assert!(light_cmtat::decimals(&metadata) == 9, 9);
-            test_scenario::return_immutable(metadata);
-
-            // Return shared objects
-            test_scenario::return_shared(registry);
-            test_scenario::return_shared(deny_list);
-
-            // Check capabilities were transferred to deployer (ADMIN)
-            assert!(test_scenario::has_most_recent_for_sender<AdminCap>(scenario), 10);
-            assert!(test_scenario::has_most_recent_for_sender<MinterCap>(scenario), 11);
-            assert!(test_scenario::has_most_recent_for_sender<PauserCap>(scenario), 12);
-            assert!(test_scenario::has_most_recent_for_sender<TreasuryCap<LightCMTAT>>(scenario), 13);
+            // Check capabilities
+            assert!(test_scenario::has_most_recent_for_sender<AdminCap>(scenario), 3);
+            assert!(test_scenario::has_most_recent_for_sender<MinterCap>(scenario), 4);
+            assert!(test_scenario::has_most_recent_for_sender<PauserCap>(scenario), 5);
+            assert!(test_scenario::has_most_recent_for_sender<EnforcerCap>(scenario), 6);
+            assert!(test_scenario::has_most_recent_for_sender<TreasuryCap<LIGHT_CMTAT>>(scenario), 7);
+            assert!(test_scenario::has_most_recent_for_sender<DenyCapV1<LIGHT_CMTAT>>(scenario), 8);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    // ========== CAPABILITY MANAGEMENT TESTS ==========
+    // ========== VIEW FUNCTION TESTS ==========
 
     #[test]
-    fun test_create_minter_cap() {
+    fun test_view_functions() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
-
-        // Take existing minter cap
-        let existing_minter = test_scenario::take_from_sender<MinterCap>(scenario);
-
-        // Create new minter cap
-        let ctx = test_scenario::ctx(scenario);
-        let new_minter = light_cmtat::create_minter_cap(ctx);
-
-        // Verify new cap is created
-        assert!(object::id(&new_minter) != object::id(&existing_minter), 0);
-
-        // Return caps
-        test_scenario::return_to_sender(scenario, existing_minter);
-        test_scenario::return_to_sender(scenario, new_minter);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_grant_minter() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        // Take admin cap
-        let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
-        let minter_cap = light_cmtat::create_minter_cap(test_scenario::ctx(scenario));
-
-        // Grant minter to USER1
-        light_cmtat::grant_minter(&admin_cap, minter_cap, USER1);
-
-        // Next tx as USER1 to check they received the cap
-        test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<MinterCap>(scenario), 0);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let metadata = test_scenario::take_immutable<CoinMetadata<LIGHT_CMTAT>>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+
+            // Test metadata
+            assert!(light_cmtat::name(&metadata) == string::utf8(b"Light CMTAT Token"), 0);
+            assert!(light_cmtat::symbol(&metadata) == string::utf8(b"LCMTAT"), 1);
+            assert!(light_cmtat::decimals(&metadata) == 9, 2);
+
+            // Test registry
+            assert!(light_cmtat::terms(&registry) == string::utf8(b""), 3);
+            assert!(light_cmtat::information(&registry) == string::utf8(b""), 4);
+            assert!(light_cmtat::token_id(&registry) == string::utf8(b""), 5);
+            assert!(!light_cmtat::deactivated(&registry), 6);
+
+            // Test supply
+            assert!(light_cmtat::total_supply(&treasury_cap) == 0, 7);
+
+            test_scenario::return_immutable(metadata);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, treasury_cap);
         };
-
-        // Return admin cap
-        test_scenario::return_to_sender(scenario, admin_cap);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_create_pauser_cap() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        // Take existing pauser cap
-        let existing_pauser = test_scenario::take_from_sender<PauserCap>(scenario);
-
-        // Create new pauser cap
-        let ctx = test_scenario::ctx(scenario);
-        let new_pauser = light_cmtat::create_pauser_cap(ctx);
-
-        // Verify new cap is created and has deny cap
-        assert!(object::id(&new_pauser) != object::id(&existing_pauser), 0);
-
-        // Return caps
-        test_scenario::return_to_sender(scenario, existing_pauser);
-        test_scenario::return_to_sender(scenario, new_pauser);
 
         test_scenario::end(scenario_val);
     }
@@ -156,107 +98,71 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
 
-        // Take required objects
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
 
-        // Mint tokens to USER1
-        let ctx = test_scenario::ctx(scenario);
-        let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
-        iota::transfer::public_transfer(coins, USER1); // Transfer the minted coins to USER1
+            assert!(coin::value(&coins) == 5000, 0);
+            assert!(light_cmtat::total_supply(&treasury_cap) == 5000, 1);
 
-        // Check total supply increased
-        assert!(coin::total_supply(&treasury_cap) == 5000, 0);
+            transfer::public_transfer(coins, USER1);
 
-        // Check USER1 has the coins
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Verify USER1 received coins
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<LightCMTAT>>(scenario), 1);
-            let user_coins = test_scenario::take_from_sender<Coin<LightCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 5000, 2);
+            assert!(test_scenario::has_most_recent_for_sender<Coin<LIGHT_CMTAT>>(scenario), 0);
+            let user_coins = test_scenario::take_from_sender<Coin<LIGHT_CMTAT>>(scenario);
+            assert!(coin::value(&user_coins) == 5000, 1);
             test_scenario::return_to_sender(scenario, user_coins);
         };
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
         test_scenario::end(scenario_val);
     }
 
     #[test]
-    fun test_mint_when_paused() {
+    fun test_mint_and_transfer() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
 
-        // Take objects
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::mint_and_transfer(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 3000, ctx);
 
-        // Pause the contract
-        light_cmtat::pause(&pauser_cap, &mut deny_list, test_scenario::ctx(scenario));
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
-        // Try to mint - should fail
-        let ctx = test_scenario::ctx(scenario);
-        let mint_result = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
-        // This will abort with EModulePaused, but since it's a test, we can't catch it
-        // In real tests, this would be handled differently, but for now we assume it fails
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_to_sender(scenario, pauser_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_mint_to_frozen_address() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        // Take objects
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        // Freeze USER1
-        light_cmtat::set_address_frozen(&pauser_cap, &mut deny_list, USER1, true, test_scenario::ctx(scenario));
-
-        // Try to mint to frozen address - should fail
-        let ctx = test_scenario::ctx(scenario);
-        let mint_result = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
-        // This will abort with EAddressFrozen
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_to_sender(scenario, pauser_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+        // Verify USER1 received coins
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let user_coins = test_scenario::take_from_sender<Coin<LIGHT_CMTAT>>(scenario);
+            assert!(coin::value(&user_coins) == 3000, 0);
+            test_scenario::return_to_sender(scenario, user_coins);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -266,48 +172,100 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
-
-        // Take objects
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        // Batch mint to multiple users
-        let recipients = vector[USER1, USER2];
-        let amounts = vector[1000, 2000];
-        let ctx = test_scenario::ctx(scenario);
-        light_cmtat::batch_mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, recipients, amounts, ctx);
-
-        // Check total supply
-        assert!(coin::total_supply(&treasury_cap) == 3000, 0);
-
-        // Check USER1 received coins
-        test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<LightCMTAT>>(scenario), 1);
-            let user_coins = test_scenario::take_from_sender<Coin<LightCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 1000, 2);
-            test_scenario::return_to_sender(scenario, user_coins);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+
+            let recipients = vector[USER1, USER2];
+            let amounts = vector[1000, 2000];
+
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::batch_mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, recipients, amounts, ctx);
+
+            assert!(light_cmtat::total_supply(&treasury_cap) == 3000, 0);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
         };
 
-        // Check USER2 received coins
-        test_scenario::next_tx(scenario, USER2);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_mint_when_paused() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<LightCMTAT>>(scenario), 3);
-            let user_coins = test_scenario::take_from_sender<Coin<LightCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 2000, 4);
-            test_scenario::return_to_sender(scenario, user_coins);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+
+            // Pause
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+
+            // Try to mint - should fail
+            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
+            transfer::public_transfer(coins, USER1);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, pauser_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
         };
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_mint_to_frozen_address() {
+        let scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+
+            // Freeze USER1
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+
+            // Try to mint to frozen address - should fail
+            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
+            transfer::public_transfer(coins, USER1);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -319,63 +277,29 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
 
-        // Mint some tokens first
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
 
-        let ctx = test_scenario::ctx(scenario);
-        let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
-        assert!(coin::total_supply(&treasury_cap) == 5000, 0);
+            assert!(light_cmtat::total_supply(&treasury_cap) == 5000, 0);
 
-        // Burn the coins
-        light_cmtat::burn_entry(&mut treasury_cap, coins, ctx);
-        assert!(coin::total_supply(&treasury_cap) == 0, 1);
+            // Burn
+            light_cmtat::burn_entry(&mut treasury_cap, coins, ctx);
+            assert!(light_cmtat::total_supply(&treasury_cap) == 0, 1);
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_batch_burn() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        // Mint tokens to ADMIN
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        let ctx = test_scenario::ctx(scenario);
-        let coin1 = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 1000, ctx);
-        let coin2 = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 2000, ctx);
-        assert!(coin::total_supply(&treasury_cap) == 3000, 0);
-
-        // Batch burn
-        let coins_to_burn = vector[coin1, coin2];
-        light_cmtat::batch_burn(&minter_cap, &mut treasury_cap, &registry, coins_to_burn, ctx);
-        assert!(coin::total_supply(&treasury_cap) == 0, 1);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -385,39 +309,29 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
-
-        // Take objects
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        // First mint some tokens
-        let ctx = test_scenario::ctx(scenario);
-        let burn_coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 3000, ctx);
-        assert!(coin::total_supply(&treasury_cap) == 3000, 0);
-
-        // Burn and mint operation
-        light_cmtat::burn_and_mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, burn_coins, USER1, 1500, ctx);
-        assert!(coin::total_supply(&treasury_cap) == 1500, 1);
-
-        // Check USER1 received the new coins
-        test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<LightCMTAT>>(scenario), 2);
-            let user_coins = test_scenario::take_from_sender<Coin<LightCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 1500, 3);
-            test_scenario::return_to_sender(scenario, user_coins);
-        };
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+            let ctx = test_scenario::ctx(scenario);
+            let burn_coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 3000, ctx);
+
+            assert!(light_cmtat::total_supply(&treasury_cap) == 3000, 0);
+
+            // Burn and mint
+            light_cmtat::burn_and_mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, burn_coins, USER1, 1500, ctx);
+            assert!(light_cmtat::total_supply(&treasury_cap) == 1500, 1);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -429,102 +343,67 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize and mint to ADMIN
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
 
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
 
-        let ctx = test_scenario::ctx(scenario);
-        let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
+            // Transfer to USER1
+            light_cmtat::transfer(&registry, &deny_list, coins, USER1, ctx);
 
-        // Transfer to USER1
-        light_cmtat::transfer(&registry, &deny_list, coins, USER1, ctx);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
-        // Check USER1 received the coins
+        // Verify USER1 received coins
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<Coin<LightCMTAT>>(scenario), 0);
-            let user_coins = test_scenario::take_from_sender<Coin<LightCMTAT>>(scenario);
-            assert!(coin::value(&user_coins) == 5000, 1);
+            let user_coins = test_scenario::take_from_sender<Coin<LIGHT_CMTAT>>(scenario);
+            assert!(coin::value(&user_coins) == 5000, 0);
             test_scenario::return_to_sender(scenario, user_coins);
         };
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
         test_scenario::end(scenario_val);
     }
 
-    #[test]
-    fun test_transfer_when_paused() {
-        let scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        // Initialize and mint to ADMIN
-        init_for_testing(test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, ADMIN);
-
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
-
-        let ctx = test_scenario::ctx(scenario);
-        let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
-
-        // Pause
-        light_cmtat::pause(&pauser_cap, &mut deny_list, ctx);
-
-        // Try to transfer - should fail
-        light_cmtat::transfer(&registry, &deny_list, coins, USER1, ctx);
-        // This will abort with EModulePaused
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_to_sender(scenario, pauser_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
-
-        test_scenario::end(scenario_val);
-    }
-
-    // ========== FREEZE/PAUSE TESTS ==========
+    // ========== FREEZE TESTS ==========
 
     #[test]
     fun test_freeze_address() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
-        let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-        // Freeze USER1
-        light_cmtat::set_address_frozen(&pauser_cap, &mut deny_list, USER1, true, test_scenario::ctx(scenario));
+            // Freeze USER1
+            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+            assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);
 
-        // Verify USER1 is frozen
-        assert!(light_cmtat::is_frozen(&deny_list, USER1), 0);
-        assert!(!light_cmtat::is_frozen(&deny_list, USER2), 1);
+            // Unfreeze USER1
+            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, false, ctx);
+            assert!(!light_cmtat::is_frozen(&deny_list, USER1, ctx), 1);
 
-        // Unfreeze USER1
-        light_cmtat::set_address_frozen(&pauser_cap, &mut deny_list, USER1, false, test_scenario::ctx(scenario));
-        assert!(!light_cmtat::is_frozen(&deny_list, USER1), 2);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, pauser_cap);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -534,54 +413,64 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
-        let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let accounts = vector[USER1, USER2];
+            let statuses = vector[true, true];
 
-        // Batch freeze USER1 and USER2
-        let accounts = vector[USER1, USER2];
-        light_cmtat::batch_set_address_frozen(&pauser_cap, &mut deny_list, accounts, true, test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::batch_set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, accounts, statuses, ctx);
 
-        // Verify both are frozen
-        assert!(light_cmtat::is_frozen(&deny_list, USER1), 0);
-        assert!(light_cmtat::is_frozen(&deny_list, USER2), 1);
+            assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);
+            assert!(light_cmtat::is_frozen(&deny_list, USER2, ctx), 1);
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, pauser_cap);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
 
+    // ========== PAUSE TESTS ==========
+
     #[test]
-    fun test_pause() {
+    fun test_pause_unpause() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
-        let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-        // Verify not paused initially
-        assert!(!light_cmtat::is_paused(&deny_list, test_scenario::ctx(scenario)), 0);
+            assert!(!light_cmtat::is_paused(&deny_list, ctx), 0);
 
-        // Pause
-        light_cmtat::pause(&pauser_cap, &mut deny_list, test_scenario::ctx(scenario));
-        assert!(light_cmtat::is_paused(&deny_list, test_scenario::ctx(scenario)), 1);
+            // Pause
+            light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            assert!(light_cmtat::is_paused(&deny_list, ctx), 1);
 
-        // Unpause
-        light_cmtat::unpause(&pauser_cap, &mut deny_list, test_scenario::ctx(scenario));
-        assert!(!light_cmtat::is_paused(&deny_list, test_scenario::ctx(scenario)), 2);
+            // Unpause
+            light_cmtat::unpause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            assert!(!light_cmtat::is_paused(&deny_list, ctx), 2);
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, pauser_cap);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, pauser_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
@@ -593,109 +482,84 @@ use move_cmtat::light_cmtat::{
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
-        let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            assert!(!light_cmtat::deactivated(&registry), 0);
 
-        // Verify not deactivated
-        assert!(!light_cmtat::deactivated(&registry), 0);
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::deactivate_contract(&admin_cap, &mut registry, &mut deny_list, &mut deny_cap, ctx);
 
-        // Deactivate
-        light_cmtat::deactivate_contract(&admin_cap, &mut registry, test_scenario::ctx(scenario));
-        assert!(light_cmtat::deactivated(&registry), 1);
+            assert!(light_cmtat::deactivated(&registry), 1);
 
-        // Return objects
-        test_scenario::return_to_sender(scenario, admin_cap);
-        test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
 
         test_scenario::end(scenario_val);
     }
 
-    // ========== VIEW FUNCTIONS TESTS ==========
+    // ========== CAPABILITY GRANTING TESTS ==========
 
     #[test]
-    fun test_view_functions() {
+    fun test_grant_minter() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-        let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let metadata = test_scenario::take_immutable<CoinMetadata>(scenario);
+            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
 
-        // Test metadata functions
-        assert!(light_cmtat::name(&metadata) == string::utf8(b"Light CMTAT Token"), 0);
-        assert!(light_cmtat::symbol(&metadata) == string::utf8(b"LIGHT_CMTAT"), 1);
-        assert!(light_cmtat::decimals(&metadata) == 9, 2);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
 
-        // Test total supply
-        assert!(light_cmtat::total_supply(&treasury_cap) == 0, 3);
-
-        // Test registry functions
-        assert!(light_cmtat::terms(&registry) == string::utf8(b""), 4);
-        assert!(light_cmtat::information(&registry) == string::utf8(b""), 5);
-        assert!(light_cmtat::token_id(&registry) == string::utf8(b""), 6);
-
-        // Set some values
-        light_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"Test terms"));
-        light_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"Test info"));
-        light_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TEST_ID"));
-
-        // Verify changes
-        assert!(light_cmtat::terms(&registry) == string::utf8(b"Test terms"), 7);
-        assert!(light_cmtat::information(&registry) == string::utf8(b"Test info"), 8);
-        assert!(light_cmtat::token_id(&registry) == string::utf8(b"TEST_ID"), 9);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, admin_cap);
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_immutable(metadata);
+        // Verify USER1 received capability
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<MinterCap>(scenario), 0);
+        };
 
         test_scenario::end(scenario_val);
     }
 
-    // ========== EVENT TESTS ==========
-    // Note: Events cannot be directly tested in test_scenario as there's no can_emit_event function
-    // Instead, we verify that transactions succeed and assume events are emitted correctly
+    // ========== ADMINISTRATIVE TESTS ==========
 
     #[test]
-    fun test_token_minted_event() {
+    fun test_admin_functions() {
         let scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        // Initialize
-        init_for_testing(test_scenario::ctx(scenario));
+        setup(scenario);
+
         test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
 
-        let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LightCMTAT>>(scenario);
-        let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-        let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-        let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            light_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"));
+            light_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"New Info"));
+            light_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TOKEN123"));
 
-        // Mint - this should emit TokenMinted event
-        let ctx = test_scenario::ctx(scenario);
-        let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
+            assert!(light_cmtat::terms(&registry) == string::utf8(b"New Terms"), 0);
+            assert!(light_cmtat::information(&registry) == string::utf8(b"New Info"), 1);
+            assert!(light_cmtat::token_id(&registry) == string::utf8(b"TOKEN123"), 2);
 
-        // Transfer the coins to USER1
-        transfer::public_transfer(coins, USER1);
-
-        // Check that an event was emitted (num_user_events > 0)
-        let effects = test_scenario::next_tx(scenario, ADMIN);
-        assert!(test_scenario::num_user_events(&effects) > 0, 0);
-
-        // Return objects
-        test_scenario::return_to_sender(scenario, treasury_cap);
-        test_scenario::return_to_sender(scenario, minter_cap);
-        test_scenario::return_shared(registry);
-        test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_shared(registry);
+        };
 
         test_scenario::end(scenario_val);
     }

@@ -186,9 +186,9 @@ module move_cmtat::light_cmtat {
         coin::deny_list_v1_is_global_pause_enabled_current_epoch<LIGHT_CMTAT>(deny_list, ctx)
     }
 
-    // ✅ FIX: Use deny_list::contains instead
-    public fun is_frozen(deny_list: &DenyList, account: address): bool {
-        deny_list::v1_contains_current_epoch<LIGHT_CMTAT>(deny_list, account)
+    // ✅ FIX: Use coin::deny_list_v1_contains_current_epoch instead
+    public fun is_frozen(deny_list: &DenyList, account: address, ctx: &TxContext): bool {
+        coin::deny_list_v1_contains_current_epoch<LIGHT_CMTAT>(deny_list, account, ctx)
     }
 
     // ========== ROLE GETTERS ==========
@@ -234,7 +234,7 @@ module move_cmtat::light_cmtat {
     ): Coin<LIGHT_CMTAT> {
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused(deny_list, ctx), EModulePaused);
-        assert!(!is_frozen(deny_list, to), EAddressFrozen);
+        assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
 
         let coins = coin::mint(treasury_cap, amount, ctx);
 
@@ -359,7 +359,7 @@ module move_cmtat::light_cmtat {
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused(deny_list, ctx), EModulePaused);
-        assert!(!is_frozen(deny_list, mint_to), EAddressFrozen);
+        assert!(!is_frozen(deny_list, mint_to, ctx), EAddressFrozen);
         assert!(mint_amount > 0, EInvalidAmount);
 
         burn(treasury_cap, burn_coins, ctx);
@@ -387,8 +387,8 @@ module move_cmtat::light_cmtat {
 
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused(deny_list, ctx), EModulePaused);
-        assert!(!is_frozen(deny_list, from), EAddressFrozen);
-        assert!(!is_frozen(deny_list, to), EAddressFrozen);
+        assert!(!is_frozen(deny_list, from, ctx), EAddressFrozen);
+        assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
 
         transfer::public_transfer(coins, to);
     }
@@ -491,3 +491,7 @@ module move_cmtat::light_cmtat {
         init(LIGHT_CMTAT {}, ctx);
     }
 }
+
+
+
+

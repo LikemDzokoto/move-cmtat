@@ -107,4 +107,10 @@ module move_cmtat::rule_engine {
 
         restriction_code_valid()
     }
+
+    /// Require that a transfer is valid (restriction code is 0)
+    /// Aborts if the transfer is restricted
+    public fun require_valid_transfer(restriction_code: u8) {
+        assert!(restriction_code == restriction_code_valid(), ETransferRestricted);
+    }
 }
