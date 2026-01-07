@@ -3,7 +3,7 @@
 module move_cmtat::freeze {
     use iota::object::{Self, UID};
     use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};  // ✅ FIX: Add table import
+    use iota::table::{Self, Table};  
 
     /// Errors
     const EFrozenAddress: u64 = 200;
@@ -26,8 +26,8 @@ module move_cmtat::freeze {
     }
 
     /// Check if address is frozen
-    public fun is_frozen(_state: &FreezeState, _account: address): bool {  // ✅ FIX: Prefix with _
-        // ✅ NOTE: Should use native DenyList instead
+    public fun is_frozen(_state: &FreezeState, _account: address): bool { 
+        //  NOTE: Should use native DenyList instead
         // if (table::contains(&state.frozen_addresses, account)) {
         //     *table::borrow(&state.frozen_addresses, account)
         // } else {
@@ -37,8 +37,8 @@ module move_cmtat::freeze {
     }
 
     /// Set address frozen status
-    public fun set_address_frozen(_state: &mut FreezeState, _account: address, _frozen: bool) {  // ✅ FIX: Prefix with _
-        // ✅ NOTE: Should use native DenyList instead
+    public fun set_address_frozen(_state: &mut FreezeState, _account: address, _frozen: bool) { 
+        //  NOTE: Should use native DenyList instead
         // if (table::contains(&state.frozen_addresses, account)) {
         //     let status = table::borrow_mut(&mut state.frozen_addresses, account);
         //     *status = frozen;
@@ -53,7 +53,7 @@ module move_cmtat::freeze {
         accounts: vector<address>,
         statuses: vector<bool>
     ) {
-        let i = 0;
+        let mut i = 0;
         let len = vector::length(&accounts);
         assert!(len == vector::length(&statuses), 0);
         

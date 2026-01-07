@@ -1,8 +1,8 @@
-/// Allowlist Component - Address Allowlisting (FIXED)
+/// Allowlist Component - Address Allowlisting 
 module move_cmtat::allowlist {
     use iota::object::{Self, UID};
     use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};  // ✅ FIX: Add table import
+    use iota::table::{Self, Table};  
 
     /// Errors
     const ENotAllowlisted: u64 = 300;
@@ -34,12 +34,12 @@ module move_cmtat::allowlist {
     }
 
     /// Check if address is allowlisted
-    public fun is_allowlisted(state: &AllowlistState, _account: address): bool {  // ✅ FIX: Prefix with _
+    public fun is_allowlisted(state: &AllowlistState, _account: address): bool {  //  FIX: Prefix with _
         if (!state.enabled) {
             return true  // If disabled, everyone is allowed
         };
 
-        // ✅ FIX: Temporarily return true
+        // FIX: Temporarily return true
         // if (table::contains(&state.allowlisted, account)) {
         //     *table::borrow(&state.allowlisted, account)
         // } else {
@@ -49,8 +49,8 @@ module move_cmtat::allowlist {
     }
 
     /// Set address allowlist status
-    public fun set_address_allowlist(_state: &mut AllowlistState, _account: address, _status: bool) {  // ✅ FIX: Prefix with _
-        // ✅ FIX: Temporarily disabled
+    public fun set_address_allowlist(_state: &mut AllowlistState, _account: address, _status: bool) {  //  FIX: Prefix with _
+        // FIX: Temporarily disabled
         // if (table::contains(&state.allowlisted, account)) {
         //     let allowlist_status = table::borrow_mut(&mut state.allowlisted, account);
         //     *allowlist_status = status;
@@ -65,7 +65,7 @@ module move_cmtat::allowlist {
         accounts: vector<address>,
         statuses: vector<bool>
     ) {
-        let i = 0;
+        let mut i = 0;
         let len = vector::length(&accounts);
         assert!(len == vector::length(&statuses), 0);
 

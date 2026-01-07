@@ -2,8 +2,8 @@
 module move_cmtat::snapshot_engine {
     use iota::object::{Self, UID};
     use iota::tx_context::{Self, TxContext};
-    use iota::table::{Self, Table};  // ✅ FIX: Add table import
-    use iota::vec_map::{Self, VecMap};  // ✅ FIX: Add vec_map import
+    use iota::table::{Self, Table};  
+    use iota::vec_map::{Self, VecMap};  
 
     /// Errors
     const ESnapshotNotFound: u64 = 700;
@@ -50,7 +50,7 @@ module move_cmtat::snapshot_engine {
             total_supply,
         };
 
-        // ✅ FIX: Use correct vec_map::insert
+        // FIX: Use correct vec_map::insert
         vec_map::insert(&mut engine.snapshots, snapshot_id, _snapshot);
 
         // Create balance table for this snapshot
@@ -63,15 +63,15 @@ module move_cmtat::snapshot_engine {
     public fun record_balance_at_snapshot(
         engine: &mut SnapshotEngine,
         snapshot_id: u64,
-        _account: address,  // ✅ FIX: Prefix with _
+        _account: address,  // FIX: Prefix with _
         balance: u64,
         ctx: &mut TxContext
     ) {
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
 
-        let _balances = table::borrow_mut(&mut engine.balances, snapshot_id);  // ✅ FIX: Prefix with _
+        let _balances = table::borrow_mut(&mut engine.balances, snapshot_id);  //  FIX: Prefix with _
 
-        // ✅ FIX: Temporarily disabled to avoid table complexity
+        // FIX: Temporarily disabled to avoid table complexity
         // if (table::contains(balances, account)) {
         //     let balance_ref = table::borrow_mut(balances, account);
         //     *balance_ref = balance;
@@ -88,13 +88,13 @@ module move_cmtat::snapshot_engine {
     public fun get_balance_at_snapshot(
         engine: &SnapshotEngine,
         snapshot_id: u64,
-        _account: address  // ✅ FIX: Prefix with _
+        _account: address  // FIX: Prefix with _
     ): u64 {
         assert!(table::contains(&engine.balances, snapshot_id), ESnapshotNotFound);
 
-        let _balances = table::borrow(&engine.balances, snapshot_id);  // ✅ FIX: Prefix with _
+        let _balances = table::borrow(&engine.balances, snapshot_id);  //  FIX: Prefix with _
 
-        // ✅ FIX: Temporarily return 0
+        // FIX: Temporarily return 0
         // if (table::contains(balances, account)) {
         //     *table::borrow(balances, account)
         // } else {
@@ -104,8 +104,8 @@ module move_cmtat::snapshot_engine {
     }
 
     /// Get snapshot
-    public fun get_snapshot(_engine: &SnapshotEngine, _snapshot_id: u64): (u64, u64, u64) {  // ✅ FIX: Prefix with _
-        // ✅ FIX: Temporarily return dummy data
+    public fun get_snapshot(_engine: &SnapshotEngine, _snapshot_id: u64): (u64, u64, u64) {  //  FIX: Prefix with _
+        //  FIX: Temporarily return dummy data
         // assert!(vec_map::contains(&engine.snapshots, &snapshot_id), ESnapshotNotFound);
         // let snapshot = vec_map::get(&engine.snapshots, &snapshot_id);
         // (snapshot.id, snapshot.timestamp, snapshot.total_supply)
@@ -113,8 +113,8 @@ module move_cmtat::snapshot_engine {
     }
 
     /// Get total supply at snapshot
-    public fun get_total_supply_at(_engine: &SnapshotEngine, _snapshot_id: u64): u64 {  // ✅ FIX: Prefix with _
-        // ✅ FIX: Temporarily return 0
+    public fun get_total_supply_at(_engine: &SnapshotEngine, _snapshot_id: u64): u64 {  //  FIX: Prefix with _
+        // FIX: Temporarily return 0
         // assert!(vec_map::contains(&engine.snapshots, &snapshot_id), ESnapshotNotFound);
         // let snapshot = vec_map::get(&engine.snapshots, &snapshot_id);
         // snapshot.total_supply
@@ -122,8 +122,8 @@ module move_cmtat::snapshot_engine {
     }
 
     /// Check if snapshot exists
-    public fun snapshot_exists(_engine: &SnapshotEngine, _snapshot_id: u64): bool {  // ✅ FIX: Prefix with _
-        // ✅ FIX: Temporarily return true
+    public fun snapshot_exists(_engine: &SnapshotEngine, _snapshot_id: u64): bool {  //  FIX: Prefix with _
+        // FIX: Temporarily return true
         // vec_map::contains(&engine.snapshots, &snapshot_id)
         true
     }

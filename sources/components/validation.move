@@ -1,6 +1,6 @@
-/// Validation Component - Transfer Validation (FIXED)
+/// Validation Component - Transfer Validation
 module move_cmtat::validation {
-    use std::string::{Self, String};  // ✅ FIX: Add string import
+    use std::string::{Self, String};  
 
     // Restriction codes
     const RESTRICTION_CODE_VALID: u8 = 0;

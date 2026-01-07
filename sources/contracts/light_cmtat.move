@@ -272,7 +272,7 @@ module move_cmtat::light_cmtat {
         let len = vector::length(&recipients);
         assert!(len == vector::length(&amounts), ELengthMismatch);
 
-        let i = 0;
+        let mut i = 0;
         while (i < len) {
             let recipient = *vector::borrow(&recipients, i);
             let amount = *vector::borrow(&amounts, i);
@@ -424,7 +424,7 @@ module move_cmtat::light_cmtat {
         let len = vector::length(&accounts);
         assert!(len == vector::length(&statuses), ELengthMismatch);
 
-        let i = 0;
+        let mut i = 0;
         while (i < len) {
             let account = *vector::borrow(&accounts, i);
             let status = *vector::borrow(&statuses, i);

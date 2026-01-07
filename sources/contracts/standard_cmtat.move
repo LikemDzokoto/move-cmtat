@@ -1,333 +1,449 @@
-/// Standard CMTAT - Full Feature Set with Transfer Validation
- /// Implements ERC-1404 compliance with transfer restriction codes
- /// Uses capability-based access control and Coin<T> architecture
- module move_cmtat::standard_cmtat {
-      use std::string::String;
-      use iota::coin::{Self, Coin, TreasuryCap};
-      use iota::clock::{Self, Clock};
-      
-        use move_cmtat::base;
-        use move_cmtat::pause;
-        use move_cmtat::freeze;
-        use move_cmtat::validation;
-        use move_cmtat::rule_engine;
-        use move_cmtat::snapshot_engine;
-        use move_cmtat::icmtat;
+/// Standard CMTAT - Full Feature Set with Native Coin<T> Architecture
+/// Implements ERC-1404 compliance with transfer restriction codes
+/// Uses capability-based access control and native IOTA Coin<T> with DenyList
+module move_cmtat::standard_cmtat {
+    use std::string::{Self, String};
+    use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
+    use iota::deny_list::{Self, DenyList};
+    use iota::object::{Self, UID};
+    use iota::tx_context::{Self, TxContext};
+    use iota::transfer;
+    use iota::clock::{Self, Clock};
+    use iota::event;
+    
+    use move_cmtat::pause;
+    use move_cmtat::freeze;
+    use move_cmtat::validation;
+    use move_cmtat::rule_engine;
+    use move_cmtat::snapshot_engine;
+    use move_cmtat::icmtat;
 
+    // ========== ONE-TIME WITNESS ==========
+    public struct STANDARD_CMTAT has drop {}
 
-
-     /// Standard CMTAT Token shared object
-     public struct StandardCMTAT has key {
-         id: UID,
-         token_info: base::TokenInfo,
-         treasury_cap: TreasuryCap<base::CMTAT>,
-         rule_engine: rule_engine::RuleEngine,
-         snapshot_engine: snapshot_engine::SnapshotEngine,
-         document_uri: String,
-     }
-
-     /// Shared compliance state object
-     public struct ComplianceState has key {
-         id: UID,
-         pause_state: pause::PauseState,
-         freeze_state: freeze::FreezeState,
-     }
-
-     /// Capability structs for access control
-     public struct AdminCap has key, store { id: UID }
-     public struct MintCap has key, store { id: UID }
-     public struct BurnCap has key, store { id: UID }
-     public struct FreezeCap has key, store { id: UID }
-     public struct PauseCap has key, store { id: UID }
-     public struct SnapshotCap has key, store { id: UID }
-
-     /// Initialize Standard CMTAT with native IOTA token architecture
-     /// Creates TreasuryCap<CMTAT>, mints initial supply, and distributes capabilities
-     public entry fun init_token(
-         name: String,
-         symbol: String,
-         decimals: u8,
-         initial_supply: u64,
-         recipient: address,
-         ctx: &mut TxContext
-     ) {
-         // Create token metadata
-         let token_info = base::init_token_info(name, symbol, decimals, ctx);
-
-         // Create treasury cap for mint/burn authority
-         let treasury_cap = base::create_treasury_cap(ctx);
-
-         // Mint initial supply if specified
-         let initial_coins = if (initial_supply > 0) {
-             base::mint(&mut treasury_cap, initial_supply, ctx)
-         } else {
-             coin::zero<base::CMTAT>(ctx)
-         };
-
-         // Create token object
-         let token = StandardCMTAT {
-             id: object::new(ctx),
-             token_info,
-             treasury_cap,
-             rule_engine: rule_engine::init_rule_engine(ctx),
-             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
-             document_uri: std::string::utf8(b""),
-         };
-
-         // Create compliance state
-         let compliance_state = ComplianceState {
-             id: object::new(ctx),
-             pause_state: pause::init_pause_state(ctx),
-             freeze_state: freeze::init_freeze_state(ctx),
-         };
-
-         // Create capability objects
-         let admin = tx_context::sender(ctx);
-         let admin_cap = AdminCap { id: object::new(ctx) };
-         let mint_cap = MintCap { id: object::new(ctx) };
-         let burn_cap = BurnCap { id: object::new(ctx) };
-         let freeze_cap = FreezeCap { id: object::new(ctx) };
-         let pause_cap = PauseCap { id: object::new(ctx) };
-         let snapshot_cap = SnapshotCap { id: object::new(ctx) };
-
-         // Share objects
-         transfer::share_object(token);
-         transfer::share_object(compliance_state);
-
-         // Transfer capabilities to admin
-         transfer::transfer(admin_cap, admin);
-         transfer::transfer(mint_cap, admin);
-         transfer::transfer(burn_cap, admin);
-         transfer::transfer(freeze_cap, admin);
-         transfer::transfer(pause_cap, admin);
-         transfer::transfer(snapshot_cap, admin);
-
-         // Transfer initial coins to recipient (if any)
-         if (initial_supply > 0) {
-             transfer::public_transfer(initial_coins, recipient);
-         } else {
-             // Destroy zero coin
-             base::destroy_zero_coin(initial_coins);
-         }
-     }
-
-      // ============ Capability-Based Access Control ============
-
-     // ============ View Functions ============
-
-    public fun name(token: &StandardCMTAT): String {
-        base::name(&token.token_info)
+    // ========== CMTAT REGISTRY (replaces base::TokenInfo) ==========
+    public struct CMTATRegistry has key {
+        id: UID,
+        terms: String,
+        information: String,
+        token_id: String,
+        document_uri: String,
+        deactivated: bool,
     }
 
-    public fun symbol(token: &StandardCMTAT): String {
-        base::symbol(&token.token_info)
+    // ========== ENGINES ==========
+    public struct StandardCMTATState has key {
+        id: UID,
+        rule_engine: rule_engine::RuleEngine,
+        snapshot_engine: snapshot_engine::SnapshotEngine,
     }
 
-    public fun decimals(token: &StandardCMTAT): u8 {
-        base::decimals(&token.token_info)
+    // ========== COMPLIANCE STATE ==========
+    public struct ComplianceState has key {
+        id: UID,
+        pause_state: pause::PauseState,
+        freeze_state: freeze::FreezeState,
     }
 
-     public fun total_supply(token: &StandardCMTAT): u64 {
-         base::total_supply(&token.treasury_cap)
-     }
+    // ========== CAPABILITIES ==========
+    public struct AdminCap has key, store { id: UID }
+    public struct MintCap has key, store { id: UID }
+    public struct BurnCap has key, store { id: UID }
+    public struct FreezeCap has key, store { id: UID }
+    public struct PauseCap has key, store { id: UID }
+    public struct SnapshotCap has key, store { id: UID }
+    public struct EnforcerCap has key, store { id: UID }
 
-     public fun paused(compliance_state: &ComplianceState): bool {
-         pause::is_paused(&compliance_state.pause_state)
-     }
-
-     public fun deactivated(compliance_state: &ComplianceState): bool {
-         pause::is_deactivated(&compliance_state.pause_state)
-     }
-
-     public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
-         freeze::is_frozen(&compliance_state.freeze_state, account)
-     }
-
-    public fun document_uri(token: &StandardCMTAT): String {
-        token.document_uri
+    // ========== EVENTS ==========
+    public struct TokenMinted has copy, drop {
+        minter: address,
+        to: address,
+        amount: u64,
     }
 
-    // ============ ERC-1404 Transfer Validation ============
+    public struct TokenBurned has copy, drop {
+        burner: address,
+        from: address,
+        amount: u64,
+    }
 
-     /// Get restriction code for a potential transfer
-     /// Returns 0 if transfer is allowed, >0 if restricted
-     public fun detect_transfer_restriction(
-         compliance_state: &ComplianceState,
-         from: address,
-         to: address,
-         amount: u64,
-         from_balance: u64
-     ): u8 {
-         rule_engine::validate_transfer(
-             &compliance_state.pause_state,
-             &compliance_state.freeze_state,
-             from,
-             to,
-             amount,
-             from_balance
-         )
-     }
+    // ========== ERRORS ==========
+    const EModuleDeactivated: u64 = 0;
+    const EAddressFrozen: u64 = 1;
+    const EModulePaused: u64 = 2;
+    const EInvalidTransfer: u64 = 3;
 
-    /// Get human-readable message for restriction code
+    // ========== INIT FUNCTION ==========
+    fun init(witness: STANDARD_CMTAT, ctx: &mut TxContext) {
+        // Create native regulated currency with DenyList integration
+        let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
+            witness,
+            9,                                          // decimals
+            b"STCMTAT",                                // symbol
+            b"Standard CMTAT Token",                   // name
+            b"CMTAT Standard with full compliance",    // description
+            option::none(),                             // icon_url
+            true,                                       // allow global pause
+            ctx
+        );
+
+        // Create CMTAT-specific registry
+        let registry = CMTATRegistry {
+            id: object::new(ctx),
+            terms: string::utf8(b""),
+            information: string::utf8(b""),
+            token_id: string::utf8(b""),
+            document_uri: string::utf8(b""),
+            deactivated: false,
+        };
+
+        // Create state with engines
+        let state = StandardCMTATState {
+            id: object::new(ctx),
+            rule_engine: rule_engine::init_rule_engine(ctx),
+            snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
+        };
+
+        // Create compliance state
+        let compliance_state = ComplianceState {
+            id: object::new(ctx),
+            pause_state: pause::init_pause_state(ctx),
+            freeze_state: freeze::init_freeze_state(ctx),
+        };
+
+        // Create capability objects
+        let deployer = tx_context::sender(ctx);
+        let admin_cap = AdminCap { id: object::new(ctx) };
+        let mint_cap = MintCap { id: object::new(ctx) };
+        let burn_cap = BurnCap { id: object::new(ctx) };
+        let freeze_cap = FreezeCap { id: object::new(ctx) };
+        let pause_cap = PauseCap { id: object::new(ctx) };
+        let snapshot_cap = SnapshotCap { id: object::new(ctx) };
+        let enforcer_cap = EnforcerCap { id: object::new(ctx) };
+
+        // Transfer TreasuryCap and DenyCapV1 to deployer
+        transfer::public_transfer(treasury_cap, deployer);
+        transfer::public_transfer(deny_cap, deployer);
+        
+        // Freeze CoinMetadata (immutable)
+        transfer::public_freeze_object(coin_metadata);
+        
+        // Share registry and states
+        transfer::share_object(registry);
+        transfer::share_object(state);
+        transfer::share_object(compliance_state);
+
+        // Transfer capabilities to deployer
+        transfer::transfer(admin_cap, deployer);
+        transfer::transfer(mint_cap, deployer);
+        transfer::transfer(burn_cap, deployer);
+        transfer::transfer(freeze_cap, deployer);
+        transfer::transfer(pause_cap, deployer);
+        transfer::transfer(snapshot_cap, deployer);
+        transfer::transfer(enforcer_cap, deployer);
+    }
+
+    // ========== VIEW FUNCTIONS (Native CoinMetadata) ==========
+    public fun name(metadata: &CoinMetadata<STANDARD_CMTAT>): String {
+        coin::get_name(metadata)
+    }
+
+    public fun symbol(metadata: &CoinMetadata<STANDARD_CMTAT>): String {
+        string::from_ascii(coin::get_symbol(metadata))
+    }
+
+    public fun decimals(metadata: &CoinMetadata<STANDARD_CMTAT>): u8 {
+        coin::get_decimals(metadata)
+    }
+
+    public fun total_supply(treasury_cap: &TreasuryCap<STANDARD_CMTAT>): u64 {
+        coin::total_supply(treasury_cap)
+    }
+
+    // ========== CMTAT REGISTRY VIEWS ==========
+    public fun terms(registry: &CMTATRegistry): String { registry.terms }
+    public fun information(registry: &CMTATRegistry): String { registry.information }
+    public fun token_id(registry: &CMTATRegistry): String { registry.token_id }
+    public fun document_uri(registry: &CMTATRegistry): String { registry.document_uri }
+    public fun deactivated(registry: &CMTATRegistry): bool { registry.deactivated }
+
+    // ========== COMPLIANCE VIEWS ==========
+    public fun paused(compliance_state: &ComplianceState): bool {
+        pause::is_paused(&compliance_state.pause_state)
+    }
+
+    public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
+        freeze::is_frozen(&compliance_state.freeze_state, account)
+    }
+
+    public fun is_paused_native(deny_list: &DenyList, ctx: &TxContext): bool {
+        coin::deny_list_v1_is_global_pause_enabled_current_epoch<STANDARD_CMTAT>(deny_list, ctx)
+    }
+
+    public fun is_frozen_native(deny_list: &DenyList, account: address, ctx: &TxContext): bool {
+        coin::deny_list_v1_contains_current_epoch<STANDARD_CMTAT>(deny_list, account, ctx)
+    }
+
+    // ========== ERC-1404 TRANSFER VALIDATION ==========
+    public fun detect_transfer_restriction(
+        compliance_state: &ComplianceState,
+        from: address,
+        to: address,
+        amount: u64,
+        from_balance: u64
+    ): u8 {
+        rule_engine::validate_transfer(
+            &compliance_state.pause_state,
+            &compliance_state.freeze_state,
+            from,
+            to,
+            amount,
+            from_balance
+        )
+    }
+
     public fun message_for_transfer_restriction(code: u8): String {
         validation::get_restriction_message(code)
     }
 
-    // ============ Administrative Functions ============
-
-     public entry fun set_terms(
-         _admin_cap: &AdminCap,
-         token: &mut StandardCMTAT,
-         new_terms: String
-     ) {
-         base::set_terms(&mut token.token_info, new_terms);
-     }
-
-     public entry fun set_information(
-         _admin_cap: &AdminCap,
-         token: &mut StandardCMTAT,
-         new_info: String
-     ) {
-         base::set_information(&mut token.token_info, new_info);
-     }
-
-     public entry fun set_token_id(
-         _admin_cap: &AdminCap,
-         token: &mut StandardCMTAT,
-         new_id: String
-     ) {
-         base::set_token_id(&mut token.token_info, new_id);
-     }
-
-     public entry fun set_document_uri(
-         _admin_cap: &AdminCap,
-         token: &mut StandardCMTAT,
-         uri: String
-     ) {
-         token.document_uri = uri;
-     }
-
-    // ============ Minting Functions ============
-
-      public entry fun mint(
-          _mint_cap: &MintCap,
-          token: &mut StandardCMTAT,
-          compliance_state: &ComplianceState,
-          to: address,
-          amount: u64,
-          ctx: &mut TxContext
-      ) {
-         pause::require_not_paused(&compliance_state.pause_state);
-         freeze::require_not_frozen(&compliance_state.freeze_state, to);
-
-         let coins = base::mint(&mut token.treasury_cap, amount, ctx);
-         base::transfer_coin(coins, to);
-     }
-
-     // ============ Burning Functions ============
-
-     /// Burn coins provided by the user
-     public entry fun burn(
-         token: &mut StandardCMTAT,
-         coins: Coin<base::CMTAT>,
-         compliance_state: &ComplianceState
-     ) {
-         pause::require_not_paused(&compliance_state.pause_state);
-          base::burn(&mut token.treasury_cap, coins);
-      }
-
-     // ============ Pause Functions ============
-
-     public entry fun pause(
-         _pause_cap: &PauseCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         pause::pause(&mut compliance_state.pause_state);
-     }
-
-     public entry fun unpause(
-         _pause_cap: &PauseCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         pause::unpause(&mut compliance_state.pause_state);
-     }
-
-     public entry fun deactivate_contract(
-         _admin_cap: &AdminCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         pause::deactivate(&mut compliance_state.pause_state);
-     }
-
-    // ============ Freeze Functions ============
-
-     public entry fun set_address_frozen(
-         _freeze_cap: &FreezeCap,
-         compliance_state: &mut ComplianceState,
-         account: address,
-         frozen: bool
-     ) {
-         freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
-     }
-
-     public entry fun freeze_partial_tokens(
-         _freeze_cap: &FreezeCap,
-         compliance_state: &mut ComplianceState,
-         account: address,
-         amount: u64
-     ) {
-         freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
-     }
-
-     public entry fun unfreeze_partial_tokens(
-         _freeze_cap: &FreezeCap,
-         compliance_state: &mut ComplianceState,
-         account: address,
-         amount: u64
-     ) {
-         freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
-     }
-
-     // ============ Snapshot Functions ============
-
-      public entry fun schedule_snapshot(
-          _snapshot_cap: &SnapshotCap,
-          token: &mut StandardCMTAT,
-          _clock: &Clock,
-          ctx: &mut TxContext
-      ) {
-          let timestamp = clock::timestamp_ms(_clock);
-         let total_supply = base::total_supply(&token.treasury_cap);
-
-         snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
+    // ========== ADMINISTRATIVE FUNCTIONS ==========
+    public entry fun set_terms(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        new_terms: String
+    ) {
+        registry.terms = new_terms;
     }
 
-    // ============ Transfer Functions with Validation ============
+    public entry fun set_information(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        new_info: String
+    ) {
+        registry.information = new_info;
+    }
 
-    /// Transfer function with CMTAT compliance validation
-    public entry fun transfer(
+    public entry fun set_token_id(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        new_id: String
+    ) {
+        registry.token_id = new_id;
+    }
+
+    public entry fun set_document_uri(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        uri: String
+    ) {
+        registry.document_uri = uri;
+    }
+
+    // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
+    public fun mint(
+        _mint_cap: &MintCap,
+        treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+        registry: &CMTATRegistry,
         compliance_state: &ComplianceState,
-        coins: Coin<base::CMTAT>,
+        deny_list: &DenyList,
+        to: address,
+        amount: u64,
+        ctx: &mut TxContext
+    ): Coin<STANDARD_CMTAT> {
+        assert!(!registry.deactivated, EModuleDeactivated);
+        assert!(!is_paused_native(deny_list, ctx), EModulePaused);
+        assert!(!is_frozen_native(deny_list, to, ctx), EAddressFrozen);
+        
+        pause::require_not_paused(&compliance_state.pause_state);
+        freeze::require_not_frozen(&compliance_state.freeze_state, to);
+
+        let coins = coin::mint(treasury_cap, amount, ctx);
+
+        event::emit(TokenMinted {
+            minter: tx_context::sender(ctx),
+            to,
+            amount,
+        });
+
+        coins
+    }
+
+    public entry fun mint_and_transfer(
+        mint_cap: &MintCap,
+        treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+        registry: &CMTATRegistry,
+        compliance_state: &ComplianceState,
+        deny_list: &DenyList,
+        to: address,
+        amount: u64,
+        ctx: &mut TxContext
+    ) {
+        let coins = mint(mint_cap, treasury_cap, registry, compliance_state, deny_list, to, amount, ctx);
+        transfer::public_transfer(coins, to);
+    }
+
+    // ========== BURNING FUNCTIONS (Native Coin<T>) ==========
+    public fun burn(
+        treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+        coins: Coin<STANDARD_CMTAT>,
+        ctx: &TxContext
+    ) {
+        let amount = coin::value(&coins);
+        let burner = tx_context::sender(ctx);
+
+        coin::burn(treasury_cap, coins);
+
+        event::emit(TokenBurned {
+            burner,
+            from: burner,
+            amount,
+        });
+    }
+
+    public entry fun burn_entry(
+        treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+        coins: Coin<STANDARD_CMTAT>,
+        compliance_state: &ComplianceState,
+        ctx: &TxContext
+    ) {
+        pause::require_not_paused(&compliance_state.pause_state);
+        burn(treasury_cap, coins, ctx);
+    }
+
+    // ========== PAUSE FUNCTIONS ==========
+    public entry fun pause(
+        _pause_cap: &PauseCap,
+        compliance_state: &mut ComplianceState
+    ) {
+        pause::pause(&mut compliance_state.pause_state);
+    }
+
+    public entry fun unpause(
+        _pause_cap: &PauseCap,
+        compliance_state: &mut ComplianceState
+    ) {
+        pause::unpause(&mut compliance_state.pause_state);
+    }
+
+    public entry fun pause_native(
+        _pause_cap: &PauseCap,
+        deny_list: &mut DenyList,
+        deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
+        registry: &CMTATRegistry,
+        ctx: &mut TxContext
+    ) {
+        assert!(!registry.deactivated, EModuleDeactivated);
+        coin::deny_list_v1_enable_global_pause(deny_list, deny_cap, ctx);
+    }
+
+    public entry fun unpause_native(
+        _pause_cap: &PauseCap,
+        deny_list: &mut DenyList,
+        deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
+        registry: &CMTATRegistry,
+        ctx: &mut TxContext
+    ) {
+        assert!(!registry.deactivated, EModuleDeactivated);
+        coin::deny_list_v1_disable_global_pause(deny_list, deny_cap, ctx);
+    }
+
+    public entry fun deactivate_contract(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        compliance_state: &mut ComplianceState
+    ) {
+        registry.deactivated = true;
+        pause::deactivate(&mut compliance_state.pause_state);
+    }
+
+    // ========== FREEZE FUNCTIONS ==========
+    public entry fun set_address_frozen(
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        frozen: bool
+    ) {
+        freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
+    }
+
+    public entry fun set_address_frozen_native(
+        _enforcer_cap: &EnforcerCap,
+        deny_list: &mut DenyList,
+        deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
+        account: address,
+        frozen: bool,
+        ctx: &mut TxContext
+    ) {
+        if (frozen) {
+            coin::deny_list_v1_add(deny_list, deny_cap, account, ctx);
+        } else {
+            coin::deny_list_v1_remove(deny_list, deny_cap, account, ctx);
+        }
+    }
+
+    public entry fun freeze_partial_tokens(
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        amount: u64
+    ) {
+        freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+    }
+
+    public entry fun unfreeze_partial_tokens(
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        amount: u64
+    ) {
+        freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+    }
+
+    // ========== SNAPSHOT FUNCTIONS ==========
+    public entry fun schedule_snapshot(
+        _snapshot_cap: &SnapshotCap,
+        state: &mut StandardCMTATState,
+        treasury_cap: &TreasuryCap<STANDARD_CMTAT>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let timestamp = clock::timestamp_ms(clock);
+        let total_supply = coin::total_supply(treasury_cap);
+        snapshot_engine::create_snapshot(&mut state.snapshot_engine, total_supply, timestamp, ctx);
+    }
+
+    // ========== TRANSFER FUNCTIONS WITH VALIDATION ==========
+    public entry fun transfer(
+        registry: &CMTATRegistry,
+        compliance_state: &ComplianceState,
+        deny_list: &DenyList,
+        coins: Coin<STANDARD_CMTAT>,
         to: address,
         ctx: &TxContext
     ) {
         let from = tx_context::sender(ctx);
-        let amount = base::coin_value(&coins);
+        let amount = coin::value(&coins);
+        assert!(!registry.deactivated, EModuleDeactivated);
+        assert!(!is_paused_native(deny_list, ctx), EModulePaused);
+        assert!(!is_frozen_native(deny_list, from, ctx), EAddressFrozen);
+        assert!(!is_frozen_native(deny_list, to, ctx), EAddressFrozen);
 
-        // Validate transfer using rule engine
         let restriction_code = rule_engine::validate_transfer(
             &compliance_state.pause_state,
             &compliance_state.freeze_state,
             from,
             to,
             amount,
-            amount  // from_balance is the coin value being transferred
+            amount
         );
 
-        // Require valid transfer
         rule_engine::require_valid_transfer(restriction_code);
+        transfer::public_transfer(coins, to);
+    }
 
-        // Transfer the coins
-        base::transfer_coin(coins, to);
-     }
+    // ========== TEST-ONLY ==========
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(STANDARD_CMTAT {}, ctx);
+    }
 }

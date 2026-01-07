@@ -1,12 +1,16 @@
-/// Debt CMTAT - CMTAT for Debt Securities
+/// Debt CMTAT - Native Coin<T> for Debt Securities
 /// Specialized for corporate bonds and debt instruments
-/// Implements 10 roles including DEBT_ROLE
+/// Implements debt-specific controls with native DenyList
 module move_cmtat::debt_cmtat {
-    use std::string::String;
-    use iota::coin::{Self, Coin, TreasuryCap};
+    use std::string::{Self, String};
+    use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
+    use iota::deny_list::{Self, DenyList};
+    use iota::object::{Self, UID};
+    use iota::tx_context::{Self, TxContext};
+    use iota::transfer;
     use iota::clock::{Self, Clock};
+    use iota::event;
     
-    use move_cmtat::base;
     use move_cmtat::pause;
     use move_cmtat::freeze;
     use move_cmtat::debt;
@@ -14,19 +18,26 @@ module move_cmtat::debt_cmtat {
     use move_cmtat::snapshot_engine;
     use move_cmtat::icmtat;
 
-    /// Errors
-    const ETransferRestricted: u64 = 3004;
+    // ========== ONE-TIME WITNESS ==========
+    public struct DEBT_CMTAT has drop {}
 
-    /// Debt CMTAT Token shared object
-    public struct DebtCMTAT has key {
+    // ========== CMTAT REGISTRY ==========
+    public struct CMTATRegistry has key {
         id: UID,
-        token_info: base::TokenInfo,
-        treasury_cap: TreasuryCap<base::CMTAT>,
-        snapshot_engine: snapshot_engine::SnapshotEngine,
+        terms: String,
+        information: String,
+        token_id: String,
         document_uri: String,
+        deactivated: bool,
     }
 
-    /// Shared compliance state object (includes debt state)
+    // ========== STATE WITH SNAPSHOT ENGINE ==========
+    public struct DebtCMTATState has key {
+        id: UID,
+        snapshot_engine: snapshot_engine::SnapshotEngine,
+    }
+
+    // ========== COMPLIANCE STATE (includes debt) ==========
     public struct ComplianceState has key {
         id: UID,
         pause_state: pause::PauseState,
@@ -34,7 +45,7 @@ module move_cmtat::debt_cmtat {
         debt_state: debt::DebtState,
     }
 
-    /// Capability structs for access control
+    // ========== CAPABILITIES ==========
     public struct AdminCap has key, store { id: UID }
     public struct MintCap has key, store { id: UID }
     public struct BurnCap has key, store { id: UID }
@@ -42,40 +53,73 @@ module move_cmtat::debt_cmtat {
     public struct PauseCap has key, store { id: UID }
     public struct SnapshotCap has key, store { id: UID }
     public struct DebtCap has key, store { id: UID }
+    public struct EnforcerCap has key, store { id: UID }
 
-    /// Initialize Debt CMTAT with native IOTA token architecture
-    /// Creates TreasuryCap<CMTAT>, mints initial supply, and distributes capabilities
-    public entry fun init_token(
-        name: String,
-        symbol: String,
-        decimals: u8,
-        initial_supply: u64,
-        recipient: address,
-        ctx: &mut TxContext
-    ) {
-        // Create token metadata
-        let token_info = base::init_token_info(name, symbol, decimals, ctx);
+    // ========== EVENTS ==========
+    public struct TokenMinted has copy, drop {
+        minter: address,
+        to: address,
+        amount: u64,
+    }
 
-        // Create treasury cap for mint/burn authority
-        let treasury_cap = base::create_treasury_cap(ctx);
+    public struct TokenBurned has copy, drop {
+        burner: address,
+        from: address,
+        amount: u64,
+    }
 
-        // Mint initial supply if specified
-        let initial_coins = if (initial_supply > 0) {
-            base::mint(&mut treasury_cap, initial_supply, ctx)
-        } else {
-            coin::zero<base::CMTAT>(ctx)
-        };
+    public struct AddressFrozen has copy, drop {
+        enforcer: address,
+        account: address,
+    }
 
-        // Create token object
-        let token = DebtCMTAT {
+    public struct AddressUnfrozen has copy, drop {
+        enforcer: address,
+        account: address,
+    }
+
+    public struct DebtFlagged has copy, drop {
+        debt_cap_holder: address,
+    }
+
+    // ========== ERRORS ==========
+    const EModuleDeactivated: u64 = 0;
+    const EAddressFrozen: u64 = 1;
+    const EModulePaused: u64 = 2;
+    const ETransferRestricted: u64 = 3;
+    const EDebtInDefault: u64 = 4;
+
+    // ========== INIT FUNCTION ==========
+    fun init(witness: DEBT_CMTAT, ctx: &mut TxContext) {
+        // Create native regulated currency with DenyList
+        let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
+            witness,
+            9,
+            b"DTCMTAT",
+            b"Debt CMTAT Token",
+            b"CMTAT for debt securities (bonds)",
+            option::none(),
+            true,
+            ctx
+        );
+
+        // Create CMTAT registry
+        let registry = CMTATRegistry {
             id: object::new(ctx),
-            token_info,
-            treasury_cap,
-            snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
-            document_uri: std::string::utf8(b""),
+            terms: string::utf8(b""),
+            information: string::utf8(b""),
+            token_id: string::utf8(b""),
+            document_uri: string::utf8(b""),
+            deactivated: false,
         };
 
-        // Create compliance state
+        // Create state with snapshot engine
+        let state = DebtCMTATState {
+            id: object::new(ctx),
+            snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
+        };
+
+        // Create compliance state with debt state
         let compliance_state = ComplianceState {
             id: object::new(ctx),
             pause_state: pause::init_pause_state(ctx),
@@ -83,8 +127,8 @@ module move_cmtat::debt_cmtat {
             debt_state: debt::init_debt_state(ctx),
         };
 
-        // Create capability objects
-        let admin = tx_context::sender(ctx);
+        // Create capabilities
+        let deployer = tx_context::sender(ctx);
         let admin_cap = AdminCap { id: object::new(ctx) };
         let mint_cap = MintCap { id: object::new(ctx) };
         let burn_cap = BurnCap { id: object::new(ctx) };
@@ -92,269 +136,375 @@ module move_cmtat::debt_cmtat {
         let pause_cap = PauseCap { id: object::new(ctx) };
         let snapshot_cap = SnapshotCap { id: object::new(ctx) };
         let debt_cap = DebtCap { id: object::new(ctx) };
+        let enforcer_cap = EnforcerCap { id: object::new(ctx) };
 
-        // Share objects
-        transfer::share_object(token);
+        // Transfer and freeze objects
+        transfer::public_transfer(treasury_cap, deployer);
+        transfer::public_transfer(deny_cap, deployer);
+        transfer::public_freeze_object(coin_metadata);
+        
+        transfer::share_object(registry);
+        transfer::share_object(state);
         transfer::share_object(compliance_state);
 
-        // Transfer capabilities to admin
-        transfer::transfer(admin_cap, admin);
-        transfer::transfer(mint_cap, admin);
-        transfer::transfer(burn_cap, admin);
-        transfer::transfer(freeze_cap, admin);
-        transfer::transfer(pause_cap, admin);
-        transfer::transfer(snapshot_cap, admin);
-        transfer::transfer(debt_cap, admin);
-
-        // Transfer initial coins to recipient (if any)
-        if (initial_supply > 0) {
-            transfer::public_transfer(initial_coins, recipient);
-        } else {
-            // Destroy zero coin
-            base::destroy_zero_coin(initial_coins);
-        }
+        transfer::transfer(admin_cap, deployer);
+        transfer::transfer(mint_cap, deployer);
+        transfer::transfer(burn_cap, deployer);
+        transfer::transfer(freeze_cap, deployer);
+        transfer::transfer(pause_cap, deployer);
+        transfer::transfer(snapshot_cap, deployer);
+        transfer::transfer(debt_cap, deployer);
+        transfer::transfer(enforcer_cap, deployer);
     }
 
-     // ============ Capability-Based Access Control ============
-
-     // ============ View Functions ============
-    public fun name(token: &DebtCMTAT): String {
-        base::name(&token.token_info)
+    // ========== VIEW FUNCTIONS (Native CoinMetadata) ==========
+    public fun name(metadata: &CoinMetadata<DEBT_CMTAT>): String {
+        coin::get_name(metadata)
     }
 
-    public fun symbol(token: &DebtCMTAT): String {
-        base::symbol(&token.token_info)
+    public fun symbol(metadata: &CoinMetadata<DEBT_CMTAT>): String {
+        string::from_ascii(coin::get_symbol(metadata))
     }
 
-    public fun decimals(token: &DebtCMTAT): u8 {
-        base::decimals(&token.token_info)
+    public fun decimals(metadata: &CoinMetadata<DEBT_CMTAT>): u8 {
+        coin::get_decimals(metadata)
     }
 
-     public fun total_supply(token: &DebtCMTAT): u64 {
-         base::total_supply(&token.treasury_cap)
-     }
-
-     public fun paused(compliance_state: &ComplianceState): bool {
-         pause::is_paused(&compliance_state.pause_state)
-     }
-
-     public fun deactivated(compliance_state: &ComplianceState): bool {
-         pause::is_deactivated(&compliance_state.pause_state)
-     }
-
-     public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
-         freeze::is_frozen(&compliance_state.freeze_state, account)
-     }
-
-     public fun debt(compliance_state: &ComplianceState): String {
-         debt::get_debt(&compliance_state.debt_state)
-     }
-
-     public fun credit_events(compliance_state: &ComplianceState): String {
-         debt::get_credit_events(&compliance_state.debt_state)
-     }
-
-     public fun debt_engine(compliance_state: &ComplianceState): address {
-         debt::get_debt_engine(&compliance_state.debt_state)
-     }
-
-     public fun is_default_flagged(compliance_state: &ComplianceState): bool {
-         debt::is_default_flagged(&compliance_state.debt_state)
-     }
-
-    public fun document_uri(token: &DebtCMTAT): String {
-        token.document_uri
+    public fun total_supply(treasury_cap: &TreasuryCap<DEBT_CMTAT>): u64 {
+        coin::total_supply(treasury_cap)
     }
 
-    // ============ Administrative Functions ============
+    // ========== REGISTRY VIEWS ==========
+    public fun terms(registry: &CMTATRegistry): String { registry.terms }
+    public fun information(registry: &CMTATRegistry): String { registry.information }
+    public fun token_id(registry: &CMTATRegistry): String { registry.token_id }
+    public fun document_uri(registry: &CMTATRegistry): String { registry.document_uri }
+    public fun deactivated(registry: &CMTATRegistry): bool { registry.deactivated }
 
-     public entry fun set_terms(
-         _admin_cap: &AdminCap,
-         token: &mut DebtCMTAT,
-         new_terms: String
-     ) {
-         base::set_terms(&mut token.token_info, new_terms);
-     }
+    // ========== COMPLIANCE VIEWS ==========
+    public fun paused(compliance_state: &ComplianceState): bool {
+        pause::is_paused(&compliance_state.pause_state)
+    }
 
-     public entry fun set_information(
-         _admin_cap: &AdminCap,
-         token: &mut DebtCMTAT,
-         new_info: String
-     ) {
-         base::set_information(&mut token.token_info, new_info);
-     }
+    public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
+        freeze::is_frozen(&compliance_state.freeze_state, account)
+    }
 
-     public entry fun set_token_id(
-         _admin_cap: &AdminCap,
-         token: &mut DebtCMTAT,
-         new_id: String
-     ) {
-         base::set_token_id(&mut token.token_info, new_id);
-     }
+    public fun debt(compliance_state: &ComplianceState): String {
+        debt::get_debt(&compliance_state.debt_state)
+    }
 
-     public entry fun set_document_uri(
-         _admin_cap: &AdminCap,
-         token: &mut DebtCMTAT,
-         uri: String
-     ) {
-         token.document_uri = uri;
-     }
+    public fun credit_events(compliance_state: &ComplianceState): String {
+        debt::get_credit_events(&compliance_state.debt_state)
+    }
 
-    // ============ Debt-Specific Functions ============
+    public fun debt_engine(compliance_state: &ComplianceState): address {
+        debt::get_debt_engine(&compliance_state.debt_state)
+    }
 
-     public entry fun set_debt(
-         _debt_cap: &DebtCap,
-         compliance_state: &mut ComplianceState,
-         debt_info: String
-     ) {
-         debt::set_debt(&mut compliance_state.debt_state, debt_info);
-     }
+    public fun is_default_flagged(compliance_state: &ComplianceState): bool {
+        debt::is_default_flagged(&compliance_state.debt_state)
+    }
 
-     public entry fun set_credit_events(
-         _debt_cap: &DebtCap,
-         compliance_state: &mut ComplianceState,
-         events: String
-     ) {
-         debt::set_credit_events(&mut compliance_state.debt_state, events);
-     }
+    public fun is_paused_native(deny_list: &DenyList, ctx: &TxContext): bool {
+        coin::deny_list_v1_is_global_pause_enabled_current_epoch<DEBT_CMTAT>(deny_list, ctx)
+    }
 
-     public entry fun set_debt_engine(
-         _debt_cap: &DebtCap,
-         compliance_state: &mut ComplianceState,
-         engine: address
-     ) {
-         debt::set_debt_engine(&mut compliance_state.debt_state, engine);
-     }
+    public fun is_frozen_native(deny_list: &DenyList, account: address, ctx: &TxContext): bool {
+        coin::deny_list_v1_contains_current_epoch<DEBT_CMTAT>(deny_list, account, ctx)
+    }
 
-     public entry fun flag_default(
-         _debt_cap: &DebtCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         debt::flag_default(&mut compliance_state.debt_state);
-     }
+    // ========== ADMINISTRATIVE FUNCTIONS ==========
+    public entry fun set_terms(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        new_terms: String
+    ) {
+        registry.terms = new_terms;
+    }
 
-    // ============ Minting Functions ============
+    public entry fun set_information(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        new_info: String
+    ) {
+        registry.information = new_info;
+    }
 
-    public entry fun mint(
+    public entry fun set_token_id(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        new_id: String
+    ) {
+        registry.token_id = new_id;
+    }
+
+    public entry fun set_document_uri(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        uri: String
+    ) {
+        registry.document_uri = uri;
+    }
+
+    // ========== DEBT-SPECIFIC FUNCTIONS ==========
+    public entry fun set_debt(
+        _debt_cap: &DebtCap,
+        compliance_state: &mut ComplianceState,
+        debt_info: String
+    ) {
+        debt::set_debt(&mut compliance_state.debt_state, debt_info);
+    }
+
+    public entry fun set_credit_events(
+        _debt_cap: &DebtCap,
+        compliance_state: &mut ComplianceState,
+        events: String
+    ) {
+        debt::set_credit_events(&mut compliance_state.debt_state, events);
+    }
+
+    public entry fun set_debt_engine(
+        _debt_cap: &DebtCap,
+        compliance_state: &mut ComplianceState,
+        engine: address
+    ) {
+        debt::set_debt_engine(&mut compliance_state.debt_state, engine);
+    }
+
+    public entry fun flag_default(
+        _debt_cap: &DebtCap,
+        compliance_state: &mut ComplianceState,
+        ctx: &TxContext
+    ) {
+        debt::flag_default(&mut compliance_state.debt_state);
+        
+        event::emit(DebtFlagged {
+            debt_cap_holder: tx_context::sender(ctx),
+        });
+    }
+
+    // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
+    public fun mint(
         _mint_cap: &MintCap,
-        token: &mut DebtCMTAT,
+        treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
+        registry: &CMTATRegistry,
         compliance_state: &ComplianceState,
+        deny_list: &DenyList,
         to: address,
         amount: u64,
         ctx: &mut TxContext
-    ) {
+    ): Coin<DEBT_CMTAT> {
+        assert!(!registry.deactivated, EModuleDeactivated);
+        assert!(!is_paused_native(deny_list, ctx), EModulePaused);
+        assert!(!is_frozen_native(deny_list, to, ctx), EAddressFrozen);
+        
         pause::require_not_paused(&compliance_state.pause_state);
         freeze::require_not_frozen(&compliance_state.freeze_state, to);
         debt::require_not_in_default(&compliance_state.debt_state);
 
-        let coins = base::mint(&mut token.treasury_cap, amount, ctx);
-        base::transfer_coin(coins, to);
-     }
+        let coins = coin::mint(treasury_cap, amount, ctx);
 
-     // ============ Burning Functions ============
+        event::emit(TokenMinted {
+            minter: tx_context::sender(ctx),
+            to,
+            amount,
+        });
 
-     /// Burn coins provided by the user
-     public entry fun burn(
-         token: &mut DebtCMTAT,
-         coins: Coin<base::CMTAT>,
-         compliance_state: &ComplianceState
-     ) {
-         pause::require_not_paused(&compliance_state.pause_state);
-         base::burn(&mut token.treasury_cap, coins);
-     }
+        coins
+    }
 
-     // ============ Pause Functions ============
+    public entry fun mint_and_transfer(
+        mint_cap: &MintCap,
+        treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
+        registry: &CMTATRegistry,
+        compliance_state: &ComplianceState,
+        deny_list: &DenyList,
+        to: address,
+        amount: u64,
+        ctx: &mut TxContext
+    ) {
+        let coins = mint(mint_cap, treasury_cap, registry, compliance_state, deny_list, to, amount, ctx);
+        transfer::public_transfer(coins, to);
+    }
 
-     public entry fun pause(
-         _pause_cap: &PauseCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         pause::pause(&mut compliance_state.pause_state);
-     }
+    // ========== BURNING FUNCTIONS (Native Coin<T>) ==========
+    public fun burn(
+        treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
+        coins: Coin<DEBT_CMTAT>,
+        ctx: &TxContext
+    ) {
+        let amount = coin::value(&coins);
+        let burner = tx_context::sender(ctx);
 
-     public entry fun unpause(
-         _pause_cap: &PauseCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         pause::unpause(&mut compliance_state.pause_state);
-     }
+        coin::burn(treasury_cap, coins);
 
-     public entry fun deactivate_contract(
-         _admin_cap: &AdminCap,
-         compliance_state: &mut ComplianceState
-     ) {
-         pause::deactivate(&mut compliance_state.pause_state);
-     }
+        event::emit(TokenBurned {
+            burner,
+            from: burner,
+            amount,
+        });
+    }
 
-    // ============ Freeze Functions ============
+    public entry fun burn_entry(
+        treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
+        coins: Coin<DEBT_CMTAT>,
+        compliance_state: &ComplianceState,
+        ctx: &TxContext
+    ) {
+        pause::require_not_paused(&compliance_state.pause_state);
+        burn(treasury_cap, coins, ctx);
+    }
 
-     public entry fun set_address_frozen(
-         _freeze_cap: &FreezeCap,
-         compliance_state: &mut ComplianceState,
-         account: address,
-         frozen: bool
-     ) {
-         freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
-     }
+    // ========== PAUSE FUNCTIONS ==========
+    public entry fun pause(
+        _pause_cap: &PauseCap,
+        compliance_state: &mut ComplianceState
+    ) {
+        pause::pause(&mut compliance_state.pause_state);
+    }
 
-     public entry fun freeze_partial_tokens(
-         _freeze_cap: &FreezeCap,
-         compliance_state: &mut ComplianceState,
-         account: address,
-         amount: u64
-     ) {
-         freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
-     }
+    public entry fun unpause(
+        _pause_cap: &PauseCap,
+        compliance_state: &mut ComplianceState
+    ) {
+        pause::unpause(&mut compliance_state.pause_state);
+    }
 
-     public entry fun unfreeze_partial_tokens(
-         _freeze_cap: &FreezeCap,
-         compliance_state: &mut ComplianceState,
-         account: address,
-         amount: u64
-     ) {
-         freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
-     }
+    public entry fun pause_native(
+        _pause_cap: &PauseCap,
+        deny_list: &mut DenyList,
+        deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
+        registry: &CMTATRegistry,
+        ctx: &mut TxContext
+    ) {
+        assert!(!registry.deactivated, EModuleDeactivated);
+        coin::deny_list_v1_enable_global_pause(deny_list, deny_cap, ctx);
+    }
 
-    // ============ Snapshot Functions ============
+    public entry fun unpause_native(
+        _pause_cap: &PauseCap,
+        deny_list: &mut DenyList,
+        deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
+        registry: &CMTATRegistry,
+        ctx: &mut TxContext
+    ) {
+        assert!(!registry.deactivated, EModuleDeactivated);
+        coin::deny_list_v1_disable_global_pause(deny_list, deny_cap, ctx);
+    }
 
-     public entry fun schedule_snapshot(
-         _snapshot_cap: &SnapshotCap,
-         token: &mut DebtCMTAT,
-         clock: &Clock,
-         ctx: &mut TxContext
-     ) {
-         let timestamp = clock::timestamp_ms(clock);
-         let total_supply = base::total_supply(&token.treasury_cap);
+    public entry fun deactivate_contract(
+        _admin_cap: &AdminCap,
+        registry: &mut CMTATRegistry,
+        compliance_state: &mut ComplianceState
+    ) {
+        registry.deactivated = true;
+        pause::deactivate(&mut compliance_state.pause_state);
+    }
 
-         snapshot_engine::create_snapshot(&mut token.snapshot_engine, total_supply, timestamp, ctx);
-     }
+    // ========== FREEZE FUNCTIONS ==========
+    public entry fun set_address_frozen(
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        frozen: bool
+    ) {
+        freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
+    }
 
-     // ============ Transfer Functions ============
+    public entry fun set_address_frozen_native(
+        _enforcer_cap: &EnforcerCap,
+        deny_list: &mut DenyList,
+        deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
+        account: address,
+        frozen: bool,
+        ctx: &mut TxContext
+    ) {
+        let enforcer = tx_context::sender(ctx);
 
-     /// Transfer function with CMTAT compliance validation
-     /// Users call this to transfer their Coin<CMTAT> with regulatory checks
-      public entry fun transfer(
-          _compliance_state: &ComplianceState,
-          coins: Coin<base::CMTAT>,
-          to: address,
-          ctx: &TxContext
-      ) {
-          let _from = tx_context::sender(ctx);
-          let _amount = base::coin_value(&coins);
+        if (frozen) {
+            coin::deny_list_v1_add(deny_list, deny_cap, account, ctx);
+            event::emit(AddressFrozen { enforcer, account });
+        } else {
+            coin::deny_list_v1_remove(deny_list, deny_cap, account, ctx);
+            event::emit(AddressUnfrozen { enforcer, account });
+        }
+    }
 
-          // Validate transfer using rule engine (without allowlist)
-          let restriction_code = rule_engine::validate_transfer(
-              &_compliance_state.pause_state,
-              &_compliance_state.freeze_state,
-              _from,
-              to,
-              _amount,
-              _amount  // from_balance is the coin value being transferred
-          );
+    public entry fun freeze_partial_tokens(
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        amount: u64
+    ) {
+        freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+    }
 
-         assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
+    public entry fun unfreeze_partial_tokens(
+        _freeze_cap: &FreezeCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        amount: u64
+    ) {
+        freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+    }
 
-         // Transfer the coins
-         base::transfer_coin(coins, to);
-     }
+    // ========== SNAPSHOT FUNCTIONS ==========
+    public entry fun schedule_snapshot(
+        _snapshot_cap: &SnapshotCap,
+        state: &mut DebtCMTATState,
+        treasury_cap: &TreasuryCap<DEBT_CMTAT>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let timestamp = clock::timestamp_ms(clock);
+        let total_supply = coin::total_supply(treasury_cap);
+
+        snapshot_engine::create_snapshot(&mut state.snapshot_engine, total_supply, timestamp, ctx);
+    }
+
+    // ========== TRANSFER FUNCTIONS WITH VALIDATION ==========
+    public entry fun transfer(
+        registry: &CMTATRegistry,
+        compliance_state: &ComplianceState,
+        deny_list: &DenyList,
+        coins: Coin<DEBT_CMTAT>,
+        to: address,
+        ctx: &TxContext
+    ) {
+        let from = tx_context::sender(ctx);
+        let amount = coin::value(&coins);
+
+        // Check deactivation
+        assert!(!registry.deactivated, EModuleDeactivated);
+
+        // Check debt default status
+        assert!(!is_default_flagged(compliance_state), EDebtInDefault);
+
+        // Check native DenyList
+        assert!(!is_paused_native(deny_list, ctx), EModulePaused);
+        assert!(!is_frozen_native(deny_list, from, ctx), EAddressFrozen);
+        assert!(!is_frozen_native(deny_list, to, ctx), EAddressFrozen);
+
+        // Validate transfer using rule engine
+        let restriction_code = rule_engine::validate_transfer(
+            &compliance_state.pause_state,
+            &compliance_state.freeze_state,
+            from,
+            to,
+            amount,
+            amount
+        );
+
+        assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
+
+        // Transfer the coins
+        transfer::public_transfer(coins, to);
+    }
+
+    // ========== TEST-ONLY ==========
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(DEBT_CMTAT {}, ctx);
+    }
 }

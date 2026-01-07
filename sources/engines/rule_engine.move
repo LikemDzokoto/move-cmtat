@@ -1,9 +1,8 @@
 /// Rule Engine - Transfer Restriction Rules (FIXED)
 module move_cmtat::rule_engine {
-    use iota::object::{Self, UID};  // ✅ FIX: Add missing imports
+    use iota::object::{Self, UID};  
     use iota::tx_context::TxContext;
-    use iota::table::{Self, Table};  // ✅ FIX: Add table import
-
+    use iota::table::{Self, Table};  
     use move_cmtat::icmtat;
     use move_cmtat::pause;
     use move_cmtat::freeze;
@@ -28,7 +27,7 @@ module move_cmtat::rule_engine {
 
     /// Add custom rule
     public fun add_custom_rule(_engine: &mut RuleEngine, _rule_id: vector<u8>) {
-        // ✅ FIX: Temporarily disable custom rules until table is working
+        // FIX: Temporarily disable custom rules until table is working
         // if (!table::contains(&engine.custom_rules, rule_id)) {
         //     table::add(&mut engine.custom_rules, rule_id, true);
         // }
@@ -36,7 +35,7 @@ module move_cmtat::rule_engine {
 
     /// Remove custom rule
     public fun remove_custom_rule(_engine: &mut RuleEngine, _rule_id: vector<u8>) {
-        // ✅ FIX: Temporarily disable
+        // FIX: Temporarily disable
         // if (table::contains(&engine.custom_rules, rule_id)) {
         //     table::remove(&mut engine.custom_rules, rule_id);
         // }
@@ -44,7 +43,7 @@ module move_cmtat::rule_engine {
 
     /// Check if has custom rule
     public fun has_custom_rule(_engine: &RuleEngine, _rule_id: vector<u8>): bool {
-        // ✅ FIX: Temporarily return false
+        //  FIX: Temporarily return false
         // table::contains(&engine.custom_rules, rule_id)
         false
     }
