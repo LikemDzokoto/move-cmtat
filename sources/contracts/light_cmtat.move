@@ -3,9 +3,9 @@
 module move_cmtat::light_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
-    use iota::deny_list::{Self, DenyList};
-    use iota::object::{UID};
-    use iota::tx_context::{TxContext};
+    use iota::deny_list;
+    
+    
     use iota::event;
 
     // ========== ONE-TIME WITNESS ==========
@@ -13,24 +13,24 @@ module move_cmtat::light_cmtat {
 
     // ========== CAPABILITIES ==========
     public struct AdminCap has key, store {
-        id: UID,
+        id: object::UID,
     }
 
     public struct MinterCap has key, store {
-        id: UID,
+        id: object::UID,
     }
 
     public struct PauserCap has key, store {
-        id: UID,
+        id: object::UID,
     }
 
     public struct EnforcerCap has key, store {
-        id: UID,
+        id: object::UID,
     }
 
     // ========== REGISTRY ==========
     public struct LightCMTATRegistry has key {
-        id: UID,
+        id: object::UID,
         terms: String,
         information: String,
         token_id: String,
@@ -80,7 +80,7 @@ module move_cmtat::light_cmtat {
     const EInvalidAmount: u64 = 5;
 
     // ========== INIT FUNCTION ==========
-    fun init(witness: LIGHT_CMTAT, ctx: &mut TxContext) {
+    fun init(witness: LIGHT_CMTAT, ctx: &mut tx_context::TxContext) {
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
             witness,
             9,
@@ -123,7 +123,7 @@ module move_cmtat::light_cmtat {
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         to: address,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let minter_cap = MinterCap { id: object::new(ctx) };
         transfer::transfer(minter_cap, to);
@@ -132,7 +132,7 @@ module move_cmtat::light_cmtat {
     public entry fun grant_pauser(
         _admin_cap: &AdminCap,
         to: address,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let pauser_cap = PauserCap { id: object::new(ctx) };
         transfer::transfer(pauser_cap, to);
@@ -141,7 +141,7 @@ module move_cmtat::light_cmtat {
     public entry fun grant_enforcer(
         _admin_cap: &AdminCap,
         to: address,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let enforcer_cap = EnforcerCap { id: object::new(ctx) };
         transfer::transfer(enforcer_cap, to);
@@ -182,12 +182,12 @@ module move_cmtat::light_cmtat {
         registry.deactivated
     }
 
-    public fun is_paused(deny_list: &DenyList, ctx: &TxContext): bool {
+    public fun is_paused(deny_list: &deny_list::DenyList, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_is_global_pause_enabled_current_epoch<LIGHT_CMTAT>(deny_list, ctx)
     }
 
     // ✅ FIX: Use coin::deny_list_v1_contains_current_epoch instead
-    public fun is_frozen(deny_list: &DenyList, account: address, ctx: &TxContext): bool {
+    public fun is_frozen(deny_list: &deny_list::DenyList, account: address, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_contains_current_epoch<LIGHT_CMTAT>(deny_list, account, ctx)
     }
 
@@ -227,10 +227,10 @@ module move_cmtat::light_cmtat {
         _minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         to: address,
         amount: u64,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ): Coin<LIGHT_CMTAT> {
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused(deny_list, ctx), EModulePaused);
@@ -248,15 +248,15 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun mint_and_transfer(
-        minter_cap: &MinterCap,
+        _minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         to: address,
         amount: u64,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
-        let coins = mint(minter_cap, treasury_cap, registry, deny_list, to, amount, ctx);
+        let coins = mint(_minter_cap, treasury_cap, registry, deny_list, to, amount, ctx);
         transfer::public_transfer(coins, to);
     }
 
@@ -264,10 +264,10 @@ module move_cmtat::light_cmtat {
         minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         recipients: vector<address>,
         amounts: vector<u64>,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let len = vector::length(&recipients);
         assert!(len == vector::length(&amounts), ELengthMismatch);
@@ -288,7 +288,7 @@ module move_cmtat::light_cmtat {
     public fun burn(
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         coins: Coin<LIGHT_CMTAT>,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         let amount = coin::value(&coins);
         let burner = tx_context::sender(ctx);
@@ -305,7 +305,7 @@ module move_cmtat::light_cmtat {
     public entry fun burn_entry(
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         coins: Coin<LIGHT_CMTAT>,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         burn(treasury_cap, coins, ctx);
     }
@@ -315,7 +315,7 @@ module move_cmtat::light_cmtat {
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
         coins: Coin<LIGHT_CMTAT>,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         burn(treasury_cap, coins, ctx);
@@ -326,7 +326,7 @@ module move_cmtat::light_cmtat {
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
         mut coins: vector<Coin<LIGHT_CMTAT>>,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
 
@@ -342,20 +342,20 @@ module move_cmtat::light_cmtat {
         _enforcer_cap: &EnforcerCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         coins: Coin<LIGHT_CMTAT>,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         burn(treasury_cap, coins, ctx);
     }
 
     public entry fun burn_and_mint(
-        minter_cap: &MinterCap,
+        _minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         burn_coins: Coin<LIGHT_CMTAT>,
         mint_to: address,
         mint_amount: u64,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused(deny_list, ctx), EModulePaused);
@@ -378,10 +378,10 @@ module move_cmtat::light_cmtat {
     // ========== TRANSFER FUNCTION ==========
     public entry fun transfer(
         registry: &LightCMTATRegistry,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         coins: Coin<LIGHT_CMTAT>,
         to: address,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         let from = tx_context::sender(ctx);
 
@@ -396,11 +396,11 @@ module move_cmtat::light_cmtat {
     // ========== FREEZE FUNCTIONS ==========
     public entry fun set_address_frozen(
         _enforcer_cap: &EnforcerCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         account: address,
         frozen: bool,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let enforcer = tx_context::sender(ctx);
 
@@ -415,11 +415,11 @@ module move_cmtat::light_cmtat {
 
     public entry fun batch_set_address_frozen(
         enforcer_cap: &EnforcerCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         accounts: vector<address>,
         statuses: vector<bool>,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let len = vector::length(&accounts);
         assert!(len == vector::length(&statuses), ELengthMismatch);
@@ -438,10 +438,10 @@ module move_cmtat::light_cmtat {
     // ========== PAUSE FUNCTIONS ==========
     public entry fun pause(
         _pauser_cap: &PauserCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
 
@@ -454,10 +454,10 @@ module move_cmtat::light_cmtat {
 
     public entry fun unpause(
         _pauser_cap: &PauserCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
 
@@ -472,9 +472,9 @@ module move_cmtat::light_cmtat {
     public entry fun deactivate_contract(
         _admin_cap: &AdminCap,
         registry: &mut LightCMTATRegistry,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         registry.deactivated = true;
 
@@ -487,7 +487,7 @@ module move_cmtat::light_cmtat {
 
     // ========== TEST-ONLY ==========
     #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
+    public fun init_for_testing(ctx: &mut tx_context::TxContext) {
         init(LIGHT_CMTAT {}, ctx);
     }
 }

@@ -4,18 +4,22 @@
 module move_cmtat::standard_cmtat_tests {
     use std::string;
     use iota::test_scenario::{Self};
-    use iota::coin::{Self, Coin, TreasuryCap, CoinMetadata, DenyCapV1};
+    use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
     use iota::deny_list::DenyList;
-    use iota::clock;
-    
+    use iota::object;
+
     use move_cmtat::standard_cmtat::{Self, STANDARD_CMTAT, CMTATRegistry, StandardCMTATState, 
                                       ComplianceState, AdminCap, MintCap, BurnCap, 
-                                      FreezeCap, PauseCap, SnapshotCap, EnforcerCap};
-    use move_cmtat::icmtat;
+                                       FreezeCap, PauseCap, SnapshotCap, EnforcerCap};
 
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1;
-    const USER2: address = @0x2;
+
+    // Helper to take global DenyList
+    fun take_deny_list(scenario: &mut test_scenario::Scenario): DenyList {
+        let deny_list_id = object::iota_deny_list_object_id();
+        test_scenario::take_shared_by_id<DenyList>(scenario, deny_list_id)
+    }
 
     // Helper to initialize for testing
     fun setup(scenario: &mut test_scenario::Scenario) {
@@ -30,7 +34,7 @@ module move_cmtat::standard_cmtat_tests {
 
     #[test]
     fun test_init() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -64,17 +68,17 @@ module move_cmtat::standard_cmtat_tests {
 
     #[test]
     fun test_view_functions() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let metadata = test_scenario::take_immutable<CoinMetadata<STANDARD_CMTAT>>(scenario);
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
 
             // Test metadata (native CoinMetadata)
             assert!(standard_cmtat::name(&metadata) == string::utf8(b"Standard CMTAT Token"), 0);
@@ -103,18 +107,18 @@ module move_cmtat::standard_cmtat_tests {
 
     #[test]
     fun test_mint() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             standard_cmtat::mint_and_transfer(&mint_cap, &mut treasury_cap, &registry, &compliance_state, &deny_list, USER1, 5000, ctx);
@@ -145,14 +149,14 @@ module move_cmtat::standard_cmtat_tests {
 
     #[test]
     fun test_pause_unpause() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
 
             // Verify not paused initially
@@ -177,14 +181,14 @@ module move_cmtat::standard_cmtat_tests {
 
     #[test]
     fun test_set_metadata() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
 
             standard_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"));

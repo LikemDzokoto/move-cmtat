@@ -1,23 +1,23 @@
 /// Freeze Component - Address Freezing (FIXED - Simplified for DenyList)
 /// NOTE: This is kept for backwards compatibility but should use native DenyList
 module move_cmtat::freeze {
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
+    
+    
     use iota::table::{Self, Table};  
 
     /// Errors
     const EFrozenAddress: u64 = 200;
-    const EInsufficientActiveBalance: u64 = 201;
+    
 
     /// Freeze state tracking
     public struct FreezeState has key, store {
-        id: UID,
+        id: object::UID,
         frozen_addresses: Table<address, bool>,
         frozen_tokens: Table<address, u64>,
     }
 
     /// Initialize freeze state
-    public fun init_freeze_state(ctx: &mut TxContext): FreezeState {
+    public fun init_freeze_state(ctx: &mut tx_context::TxContext): FreezeState {
         FreezeState {
             id: object::new(ctx),
             frozen_addresses: table::new(ctx),
@@ -26,25 +26,22 @@ module move_cmtat::freeze {
     }
 
     /// Check if address is frozen
-    public fun is_frozen(_state: &FreezeState, _account: address): bool { 
-        //  NOTE: Should use native DenyList instead
-        // if (table::contains(&state.frozen_addresses, account)) {
-        //     *table::borrow(&state.frozen_addresses, account)
-        // } else {
-        //     false
-        // }
-        false
+    public fun is_frozen(state: &FreezeState, account: address): bool {
+        if (table::contains(&state.frozen_addresses, account)) {
+            *table::borrow(&state.frozen_addresses, account)
+        } else {
+            false
+        }
     }
 
     /// Set address frozen status
-    public fun set_address_frozen(_state: &mut FreezeState, _account: address, _frozen: bool) { 
-        //  NOTE: Should use native DenyList instead
-        // if (table::contains(&state.frozen_addresses, account)) {
-        //     let status = table::borrow_mut(&mut state.frozen_addresses, account);
-        //     *status = frozen;
-        // } else {
-        //     table::add(&mut state.frozen_addresses, account, frozen);
-        // }
+    public fun set_address_frozen(state: &mut FreezeState, account: address, frozen: bool) {
+        if (table::contains(&state.frozen_addresses, account)) {
+            let status = table::borrow_mut(&mut state.frozen_addresses, account);
+            *status = frozen;
+        } else {
+            table::add(&mut state.frozen_addresses, account, frozen);
+        }
     }
 
     /// Batch set addresses frozen

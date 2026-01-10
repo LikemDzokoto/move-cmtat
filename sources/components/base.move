@@ -116,7 +116,7 @@ module move_cmtat::base {
     }
 
     /// Mint coins using treasury cap
-    /// ⚠️ DEPRECATED: Use coin::mint() directly
+    ///  DEPRECATED: Use coin::mint() directly
     public fun mint(
         treasury_cap: &mut TreasuryCap<CMTAT>,
         amount: u64,
@@ -126,7 +126,7 @@ module move_cmtat::base {
     }
 
     /// Burn coins using treasury cap
-    /// ⚠️ DEPRECATED: Use coin::burn() directly
+    ///  DEPRECATED: Use coin::burn() directly
     public fun burn(
         treasury_cap: &mut TreasuryCap<CMTAT>,
         coin: Coin<CMTAT>
@@ -135,7 +135,7 @@ module move_cmtat::base {
     }
 
     /// Get coin value
-    /// ⚠️ DEPRECATED: Use coin::value() directly
+    ///  DEPRECATED: Use coin::value() directly
     public fun coin_value(coin: &Coin<CMTAT>): u64 {
         coin::value(coin)
     }

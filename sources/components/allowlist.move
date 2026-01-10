@@ -34,29 +34,26 @@ module move_cmtat::allowlist {
     }
 
     /// Check if address is allowlisted
-    public fun is_allowlisted(state: &AllowlistState, _account: address): bool {  //  FIX: Prefix with _
+    public fun is_allowlisted(state: &AllowlistState, account: address): bool {
         if (!state.enabled) {
             return true  // If disabled, everyone is allowed
         };
 
-        // FIX: Temporarily return true
-        // if (table::contains(&state.allowlisted, account)) {
-        //     *table::borrow(&state.allowlisted, account)
-        // } else {
-        //     false
-        // }
-        true
+        if (table::contains(&state.allowlisted, account)) {
+            *table::borrow(&state.allowlisted, account)
+        } else {
+            false
+        }
     }
 
     /// Set address allowlist status
-    public fun set_address_allowlist(_state: &mut AllowlistState, _account: address, _status: bool) {  //  FIX: Prefix with _
-        // FIX: Temporarily disabled
-        // if (table::contains(&state.allowlisted, account)) {
-        //     let allowlist_status = table::borrow_mut(&mut state.allowlisted, account);
-        //     *allowlist_status = status;
-        // } else {
-        //     table::add(&mut state.allowlisted, account, status);
-        // }
+    public fun set_address_allowlist(state: &mut AllowlistState, account: address, status: bool) {
+        if (table::contains(&state.allowlisted, account)) {
+            let allowlist_status = table::borrow_mut(&mut state.allowlisted, account);
+            *allowlist_status = status;
+        } else {
+            table::add(&mut state.allowlisted, account, status);
+        }
     }
 
     /// Batch set allowlist status

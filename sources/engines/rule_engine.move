@@ -1,7 +1,7 @@
-/// Rule Engine - Transfer Restriction Rules (FIXED)
+/// Rule Engine - Transfer Restriction Rules 
 module move_cmtat::rule_engine {
-    use iota::object::{Self, UID};  
-    use iota::tx_context::TxContext;
+      
+    
     use iota::table::{Self, Table};  
     use move_cmtat::icmtat;
     use move_cmtat::pause;
@@ -13,12 +13,12 @@ module move_cmtat::rule_engine {
 
     /// Rule engine state
     public struct RuleEngine has key, store {
-        id: UID,
+        id: object::UID,
         custom_rules: Table<vector<u8>, bool>,
     }
 
     /// Initialize rule engine
-    public fun init_rule_engine(ctx: &mut TxContext): RuleEngine {
+    public fun init_rule_engine(ctx: &mut tx_context::TxContext): RuleEngine {
         RuleEngine {
             id: object::new(ctx),
             custom_rules: table::new(ctx),

@@ -1,4 +1,4 @@
-/// Snapshot Engine - Historical Balance Tracking (FIXED)
+/// Snapshot Engine - Historical Balance Tracking 
 module move_cmtat::snapshot_engine {
     use iota::object::{Self, UID};
     use iota::tx_context::{Self, TxContext};

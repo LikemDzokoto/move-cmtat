@@ -4,10 +4,10 @@
 module move_cmtat::standard_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
-    use iota::deny_list::{Self, DenyList};
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::transfer;
+    use iota::deny_list;
+    
+    
+    
     use iota::clock::{Self, Clock};
     use iota::event;
     
@@ -16,14 +16,14 @@ module move_cmtat::standard_cmtat {
     use move_cmtat::validation;
     use move_cmtat::rule_engine;
     use move_cmtat::snapshot_engine;
-    use move_cmtat::icmtat;
+    
 
     // ========== ONE-TIME WITNESS ==========
     public struct STANDARD_CMTAT has drop {}
 
     // ========== CMTAT REGISTRY (replaces base::TokenInfo) ==========
     public struct CMTATRegistry has key {
-        id: UID,
+        id: object::UID,
         terms: String,
         information: String,
         token_id: String,
@@ -33,26 +33,26 @@ module move_cmtat::standard_cmtat {
 
     // ========== ENGINES ==========
     public struct StandardCMTATState has key {
-        id: UID,
+        id: object::UID,
         rule_engine: rule_engine::RuleEngine,
         snapshot_engine: snapshot_engine::SnapshotEngine,
     }
 
     // ========== COMPLIANCE STATE ==========
     public struct ComplianceState has key {
-        id: UID,
+        id: object::UID,
         pause_state: pause::PauseState,
         freeze_state: freeze::FreezeState,
     }
 
     // ========== CAPABILITIES ==========
-    public struct AdminCap has key, store { id: UID }
-    public struct MintCap has key, store { id: UID }
-    public struct BurnCap has key, store { id: UID }
-    public struct FreezeCap has key, store { id: UID }
-    public struct PauseCap has key, store { id: UID }
-    public struct SnapshotCap has key, store { id: UID }
-    public struct EnforcerCap has key, store { id: UID }
+    public struct AdminCap has key, store { id: object::UID }
+    public struct MintCap has key, store { id: object::UID }
+    public struct BurnCap has key, store { id: object::UID }
+    public struct FreezeCap has key, store { id: object::UID }
+    public struct PauseCap has key, store { id: object::UID }
+    public struct SnapshotCap has key, store { id: object::UID }
+    public struct EnforcerCap has key, store { id: object::UID }
 
     // ========== EVENTS ==========
     public struct TokenMinted has copy, drop {
@@ -71,10 +71,10 @@ module move_cmtat::standard_cmtat {
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
-    const EInvalidTransfer: u64 = 3;
+    
 
     // ========== INIT FUNCTION ==========
-    fun init(witness: STANDARD_CMTAT, ctx: &mut TxContext) {
+    fun init(witness: STANDARD_CMTAT, ctx: &mut tx_context::TxContext) {
         // Create native regulated currency with DenyList integration
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
             witness,
@@ -176,11 +176,11 @@ module move_cmtat::standard_cmtat {
         freeze::is_frozen(&compliance_state.freeze_state, account)
     }
 
-    public fun is_paused_native(deny_list: &DenyList, ctx: &TxContext): bool {
+    public fun is_paused_native(deny_list: &deny_list::DenyList, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_is_global_pause_enabled_current_epoch<STANDARD_CMTAT>(deny_list, ctx)
     }
 
-    public fun is_frozen_native(deny_list: &DenyList, account: address, ctx: &TxContext): bool {
+    public fun is_frozen_native(deny_list: &deny_list::DenyList, account: address, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_contains_current_epoch<STANDARD_CMTAT>(deny_list, account, ctx)
     }
 
@@ -245,10 +245,10 @@ module move_cmtat::standard_cmtat {
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
         compliance_state: &ComplianceState,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         to: address,
         amount: u64,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ): Coin<STANDARD_CMTAT> {
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused_native(deny_list, ctx), EModulePaused);
@@ -273,10 +273,10 @@ module move_cmtat::standard_cmtat {
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
         compliance_state: &ComplianceState,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         to: address,
         amount: u64,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let coins = mint(mint_cap, treasury_cap, registry, compliance_state, deny_list, to, amount, ctx);
         transfer::public_transfer(coins, to);
@@ -286,7 +286,7 @@ module move_cmtat::standard_cmtat {
     public fun burn(
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         coins: Coin<STANDARD_CMTAT>,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         let amount = coin::value(&coins);
         let burner = tx_context::sender(ctx);
@@ -304,7 +304,7 @@ module move_cmtat::standard_cmtat {
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         coins: Coin<STANDARD_CMTAT>,
         compliance_state: &ComplianceState,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         pause::require_not_paused(&compliance_state.pause_state);
         burn(treasury_cap, coins, ctx);
@@ -327,10 +327,10 @@ module move_cmtat::standard_cmtat {
 
     public entry fun pause_native(
         _pause_cap: &PauseCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         coin::deny_list_v1_enable_global_pause(deny_list, deny_cap, ctx);
@@ -338,10 +338,10 @@ module move_cmtat::standard_cmtat {
 
     public entry fun unpause_native(
         _pause_cap: &PauseCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         coin::deny_list_v1_disable_global_pause(deny_list, deny_cap, ctx);
@@ -368,11 +368,11 @@ module move_cmtat::standard_cmtat {
 
     public entry fun set_address_frozen_native(
         _enforcer_cap: &EnforcerCap,
-        deny_list: &mut DenyList,
+        deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         account: address,
         frozen: bool,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         if (frozen) {
             coin::deny_list_v1_add(deny_list, deny_cap, account, ctx);
@@ -405,7 +405,7 @@ module move_cmtat::standard_cmtat {
         state: &mut StandardCMTATState,
         treasury_cap: &TreasuryCap<STANDARD_CMTAT>,
         clock: &Clock,
-        ctx: &mut TxContext
+        ctx: &mut tx_context::TxContext
     ) {
         let timestamp = clock::timestamp_ms(clock);
         let total_supply = coin::total_supply(treasury_cap);
@@ -416,10 +416,10 @@ module move_cmtat::standard_cmtat {
     public entry fun transfer(
         registry: &CMTATRegistry,
         compliance_state: &ComplianceState,
-        deny_list: &DenyList,
+        deny_list: &deny_list::DenyList,
         coins: Coin<STANDARD_CMTAT>,
         to: address,
-        ctx: &TxContext
+        ctx: &tx_context::TxContext
     ) {
         let from = tx_context::sender(ctx);
         let amount = coin::value(&coins);
@@ -443,7 +443,7 @@ module move_cmtat::standard_cmtat {
 
     // ========== TEST-ONLY ==========
     #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
+    public fun init_for_testing(ctx: &mut tx_context::TxContext) {
         init(STANDARD_CMTAT {}, ctx);
     }
 }

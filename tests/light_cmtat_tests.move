@@ -6,13 +6,20 @@ module move_cmtat::light_cmtat_tests_new {
     use iota::test_scenario::{Self};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
     use iota::deny_list::DenyList;
-    use iota::transfer;
-    
+    use iota::object;
+    use iota::transfer::public_transfer;
+
     use move_cmtat::light_cmtat::{Self, LIGHT_CMTAT, LightCMTATRegistry, AdminCap, MinterCap, PauserCap, EnforcerCap};
 
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1;
     const USER2: address = @0x2;
+
+    // Helper to take global DenyList
+    fun take_deny_list(scenario: &mut test_scenario::Scenario): DenyList {
+        let deny_list_id = object::iota_deny_list_object_id();
+        test_scenario::take_shared_by_id<DenyList>(scenario, deny_list_id)
+    }
 
     // Helper to initialize for testing
     fun setup(scenario: &mut test_scenario::Scenario) {
@@ -27,7 +34,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_init() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -58,7 +65,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_view_functions() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -95,17 +102,17 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_mint() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
@@ -113,7 +120,7 @@ module move_cmtat::light_cmtat_tests_new {
             assert!(coin::value(&coins) == 5000, 0);
             assert!(light_cmtat::total_supply(&treasury_cap) == 5000, 1);
 
-            transfer::public_transfer(coins, USER1);
+             public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
             test_scenario::return_to_sender(scenario, minter_cap);
@@ -135,17 +142,17 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_mint_and_transfer() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             light_cmtat::mint_and_transfer(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 3000, ctx);
@@ -169,17 +176,17 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_batch_mint() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let recipients = vector[USER1, USER2];
             let amounts = vector[1000, 2000];
@@ -201,19 +208,19 @@ module move_cmtat::light_cmtat_tests_new {
     #[test]
     #[expected_failure]
     fun test_mint_when_paused() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
-            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             // Pause
             let ctx = test_scenario::ctx(scenario);
@@ -221,7 +228,7 @@ module move_cmtat::light_cmtat_tests_new {
 
             // Try to mint - should fail
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
-            transfer::public_transfer(coins, USER1);
+             public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
             test_scenario::return_to_sender(scenario, minter_cap);
@@ -237,19 +244,19 @@ module move_cmtat::light_cmtat_tests_new {
     #[test]
     #[expected_failure]
     fun test_mint_to_frozen_address() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
-            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             // Freeze USER1
             let ctx = test_scenario::ctx(scenario);
@@ -257,7 +264,7 @@ module move_cmtat::light_cmtat_tests_new {
 
             // Try to mint to frozen address - should fail
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
-            transfer::public_transfer(coins, USER1);
+             public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
             test_scenario::return_to_sender(scenario, minter_cap);
@@ -274,17 +281,17 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_burn() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
@@ -306,17 +313,17 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_burn_and_mint() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             let burn_coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 3000, ctx);
@@ -340,17 +347,17 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_transfer() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
@@ -379,7 +386,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_freeze_address() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -387,8 +394,8 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
-            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
 
@@ -410,7 +417,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_batch_freeze() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -418,8 +425,8 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
-            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let accounts = vector[USER1, USER2];
             let statuses = vector[true, true];
@@ -442,7 +449,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_pause_unpause() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -450,9 +457,9 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
-            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let mut registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
 
@@ -479,7 +486,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_deactivate_contract() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -487,9 +494,9 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
-            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let deny_list = test_scenario::take_shared<DenyList>(scenario);
-            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let mut registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             assert!(!light_cmtat::deactivated(&registry), 0);
 
@@ -511,7 +518,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_grant_minter() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -539,7 +546,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     #[test]
     fun test_admin_functions() {
-        let scenario_val = test_scenario::begin(ADMIN);
+        let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
@@ -547,7 +554,7 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
-            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let mut registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
 
             light_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"));
             light_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"New Info"));
