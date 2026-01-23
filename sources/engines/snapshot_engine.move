@@ -63,13 +63,13 @@ module move_cmtat::snapshot_engine {
     public fun record_balance_at_snapshot(
         engine: &mut SnapshotEngine,
         snapshot_id: u64,
-        _account: address,  // FIX: Prefix with _
+        _account: address,  
         balance: u64,
         ctx: &mut TxContext
     ) {
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
 
-        let _balances = table::borrow_mut(&mut engine.balances, snapshot_id);  //  FIX: Prefix with _
+        let _balances = table::borrow_mut(&mut engine.balances, snapshot_id);  
 
         // FIX: Temporarily disabled to avoid table complexity
         // if (table::contains(balances, account)) {

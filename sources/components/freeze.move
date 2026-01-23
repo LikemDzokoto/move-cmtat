@@ -63,7 +63,7 @@ module move_cmtat::freeze {
     }
 
     /// Get frozen token amount for address
-    public fun get_frozen_amount(_state: &FreezeState, _account: address): u64 {  // ✅ FIX: Prefix with _
+    public fun get_frozen_amount(_state: &FreezeState, _account: address): u64 {    
         // if (table::contains(&state.frozen_tokens, account)) {
         //     *table::borrow(&state.frozen_tokens, account)
         // } else {
@@ -73,7 +73,7 @@ module move_cmtat::freeze {
     }
 
     /// Freeze partial tokens
-    public fun freeze_partial_tokens(_state: &mut FreezeState, _account: address, _amount: u64) {  // ✅ FIX: Prefix with _
+    public fun freeze_partial_tokens(_state: &mut FreezeState, _account: address, _amount: u64) {   
         // if (table::contains(&state.frozen_tokens, account)) {
         //     let frozen = table::borrow_mut(&mut state.frozen_tokens, account);
         //     *frozen = *frozen + amount;
@@ -83,7 +83,7 @@ module move_cmtat::freeze {
     }
 
     /// Unfreeze partial tokens
-    public fun unfreeze_partial_tokens(_state: &mut FreezeState, _account: address, _amount: u64) {  // ✅ FIX: Prefix with _
+    public fun unfreeze_partial_tokens(_state: &mut FreezeState, _account: address, _amount: u64) { 
         // if (table::contains(&state.frozen_tokens, account)) {
         //     let frozen = table::borrow_mut(&mut state.frozen_tokens, account);
         //     assert!(*frozen >= amount, EInsufficientActiveBalance);
