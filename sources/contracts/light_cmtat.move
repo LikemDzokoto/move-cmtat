@@ -186,7 +186,7 @@ module move_cmtat::light_cmtat {
         coin::deny_list_v1_is_global_pause_enabled_current_epoch<LIGHT_CMTAT>(deny_list, ctx)
     }
 
-    // ✅ FIX: Use coin::deny_list_v1_contains_current_epoch instead
+    //  Using  coin::deny_list_v1_contains_current_epoch instead
     public fun is_frozen(deny_list: &deny_list::DenyList, account: address, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_contains_current_epoch<LIGHT_CMTAT>(deny_list, account, ctx)
     }

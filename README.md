@@ -605,7 +605,6 @@ move-cmtat/
 │   │   ├── rule_engine.move       # Transfer restrictions (ERC-1404)
 │   │   └── snapshot_engine.move   # Balance snapshots
 │   ├── components/
-│   │   ├── base.move              # Base Coin<CMTAT> + TreasuryCap
 │   │   ├── pause.move             # PauseState object
 │   │   ├── freeze.move            # FreezeState object
 │   │   ├── allowlist.move         # AllowlistState object
