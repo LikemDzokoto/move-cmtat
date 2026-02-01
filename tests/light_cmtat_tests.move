@@ -5,7 +5,7 @@ module move_cmtat::light_cmtat_tests_new {
     use std::string;
     use iota::test_scenario::{Self};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
-    use iota::deny_list::DenyList;
+    use iota::deny_list::{Self, DenyList};
     use iota::transfer::public_transfer;
 
     use move_cmtat::light_cmtat::{Self, LIGHT_CMTAT, LightCMTATRegistry, AdminCap, MinterCap, PauserCap, EnforcerCap};
@@ -15,12 +15,19 @@ module move_cmtat::light_cmtat_tests_new {
     const USER2: address = @0x2;
 
     // Helper to take global DenyList
-    fun take_deny_list(scenario: &mut test_scenario::Scenario): DenyList {
+    fun take_deny_list(scenario: &test_scenario::Scenario): DenyList {
         test_scenario::take_shared<DenyList>(scenario)
     }
 
     // Helper to initialize for testing
     fun setup(scenario: &mut test_scenario::Scenario) {
+        // Create DenyList as system address @0x0
+        test_scenario::next_tx(scenario, @0x0);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            deny_list::create_for_test(ctx);
+        };
+        // Initialize token as ADMIN
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
@@ -42,10 +49,9 @@ module move_cmtat::light_cmtat_tests_new {
         {
             // Check shared objects
             assert!(test_scenario::has_most_recent_shared<LightCMTATRegistry>(), 0);
-            assert!(test_scenario::has_most_recent_shared<DenyList>(), 1);
 
             // Check immutable metadata
-            assert!(test_scenario::has_most_recent_immutable<CoinMetadata<LIGHT_CMTAT>>(), 2);
+            assert!(test_scenario::has_most_recent_immutable<CoinMetadata<LIGHT_CMTAT>>(), 1);
 
             // Check capabilities
             assert!(test_scenario::has_most_recent_for_sender<AdminCap>(scenario), 3);
@@ -455,7 +461,7 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
-            let mut registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
             let mut deny_list = take_deny_list(scenario);
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 

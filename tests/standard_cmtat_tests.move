@@ -5,7 +5,7 @@ module move_cmtat::standard_cmtat_tests {
     use std::string;
     use iota::test_scenario::{Self};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
-    use iota::deny_list::DenyList;
+    use iota::deny_list::{Self, DenyList};
 
     use move_cmtat::standard_cmtat::{Self, STANDARD_CMTAT, CMTATRegistry, StandardCMTATState,
                                       ComplianceState, AdminCap, MintCap, BurnCap,
@@ -15,12 +15,19 @@ module move_cmtat::standard_cmtat_tests {
     const USER1: address = @0x1;
 
     // Helper to take global DenyList
-    fun take_deny_list(scenario: &mut test_scenario::Scenario): DenyList {
+    fun take_deny_list(scenario: &test_scenario::Scenario): DenyList {
         test_scenario::take_shared<DenyList>(scenario)
     }
 
     // Helper to initialize for testing
     fun setup(scenario: &mut test_scenario::Scenario) {
+        // Create DenyList as system address @0x0
+        test_scenario::next_tx(scenario, @0x0);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            deny_list::create_for_test(ctx);
+        };
+        // Initialize token as ADMIN
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
@@ -73,10 +80,10 @@ module move_cmtat::standard_cmtat_tests {
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let metadata = test_scenario::take_immutable<CoinMetadata<STANDARD_CMTAT>>(scenario);
-            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
 
             // Test metadata (native CoinMetadata)
             assert!(standard_cmtat::name(&metadata) == string::utf8(b"Standard CMTAT Token"), 0);
@@ -112,8 +119,8 @@ module move_cmtat::standard_cmtat_tests {
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
             let deny_list = take_deny_list(scenario);
