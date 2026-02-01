@@ -1,9 +1,7 @@
 /// Pause Component - Pause/Unpause/Deactivate Functionality
 /// Provides circuit breaker mechanism for emergency stops
 module move_cmtat::pause {
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
- 
+
     /// Errors
     const EPaused: u64 = 100;
     const ENotPaused: u64 = 101;

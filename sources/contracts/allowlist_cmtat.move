@@ -4,10 +4,7 @@
 module move_cmtat::allowlist_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
-    use iota::deny_list::{Self, DenyList};
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::transfer;
+    use iota::deny_list::DenyList;
     use iota::clock::{Self, Clock};
     use iota::event;
     

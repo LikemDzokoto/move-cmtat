@@ -5,9 +5,7 @@ module move_cmtat::debt_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
     use iota::deny_list;
-    
-    
-    
+
     use iota::clock::{Self, Clock};
     use iota::event;
     

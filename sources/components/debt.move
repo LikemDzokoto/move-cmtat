@@ -3,8 +3,6 @@
 /// Tracks debt information, credit events, and default status
 module move_cmtat::debt {
     use std::string::String;
-    use iota::object::{Self, UID};
-    use iota::tx_context::TxContext;
 
     /// Errors
     const EDebtInDefault: u64 = 400;

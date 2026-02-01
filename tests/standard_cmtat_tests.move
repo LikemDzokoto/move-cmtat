@@ -6,10 +6,9 @@ module move_cmtat::standard_cmtat_tests {
     use iota::test_scenario::{Self};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
     use iota::deny_list::DenyList;
-    use iota::object;
 
-    use move_cmtat::standard_cmtat::{Self, STANDARD_CMTAT, CMTATRegistry, StandardCMTATState, 
-                                      ComplianceState, AdminCap, MintCap, BurnCap, 
+    use move_cmtat::standard_cmtat::{Self, STANDARD_CMTAT, CMTATRegistry, StandardCMTATState,
+                                      ComplianceState, AdminCap, MintCap, BurnCap,
                                        FreezeCap, PauseCap, SnapshotCap, EnforcerCap};
 
     const ADMIN: address = @0xAD;
@@ -17,8 +16,7 @@ module move_cmtat::standard_cmtat_tests {
 
     // Helper to take global DenyList
     fun take_deny_list(scenario: &mut test_scenario::Scenario): DenyList {
-        let deny_list_id = object::iota_deny_list_object_id();
-        test_scenario::take_shared_by_id<DenyList>(scenario, deny_list_id)
+        test_scenario::take_shared<DenyList>(scenario)
     }
 
     // Helper to initialize for testing

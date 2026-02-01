@@ -1,13 +1,10 @@
-/// Snapshot Engine - Historical Balance Tracking 
+/// Snapshot Engine - Historical Balance Tracking
 module move_cmtat::snapshot_engine {
-    use iota::object::{Self, UID};
-    use iota::tx_context::{Self, TxContext};
-    use iota::table::{Self, Table};  
-    use iota::vec_map::{Self, VecMap};  
+    use iota::table::{Self, Table};
+    use iota::vec_map::{Self, VecMap};
 
     /// Errors
     const ESnapshotNotFound: u64 = 700;
-    const EInvalidSnapshot: u64 = 701;
 
     /// Snapshot data
     public struct Snapshot has store, drop, copy {

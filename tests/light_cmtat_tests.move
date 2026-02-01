@@ -6,7 +6,6 @@ module move_cmtat::light_cmtat_tests_new {
     use iota::test_scenario::{Self};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
     use iota::deny_list::DenyList;
-    use iota::object;
     use iota::transfer::public_transfer;
 
     use move_cmtat::light_cmtat::{Self, LIGHT_CMTAT, LightCMTATRegistry, AdminCap, MinterCap, PauserCap, EnforcerCap};
@@ -17,8 +16,7 @@ module move_cmtat::light_cmtat_tests_new {
 
     // Helper to take global DenyList
     fun take_deny_list(scenario: &mut test_scenario::Scenario): DenyList {
-        let deny_list_id = object::iota_deny_list_object_id();
-        test_scenario::take_shared_by_id<DenyList>(scenario, deny_list_id)
+        test_scenario::take_shared<DenyList>(scenario)
     }
 
     // Helper to initialize for testing
