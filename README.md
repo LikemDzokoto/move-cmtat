@@ -65,21 +65,22 @@ Everything in IOTA Move is an object with capabilities. This fundamental differe
 Global state (token info, compliance rules) is stored in shared objects accessible by all:
 
 ```move
-// Token metadata and supply control
-public struct LightCMTAT has key {
+// Token registry with metadata
+public struct CMTATRegistry has key {
     id: UID,
-    token_info: TokenInfo,
-    treasury_cap: TreasuryCap<CMTAT>,
+    terms: String,
+    information: String,
+    token_id: String,
+    document_uri: String,
+    deactivated: bool,
 }
 
-// Compliance state
-public struct ComplianceState has key {
-    id: UID,
-    pause_state: PauseState,
-    freeze_state: FreezeState,
-    allowlist_state: AllowlistState,  // optional
-}
+// TreasuryCap<T> for supply control (owned by admin)
+// DenyCapV1<T> for DenyList management (owned by admin)
+// Native DenyList shared object for freeze/pause compliance
 ```
+
+**Note:** Compliance (pause/freeze) is now enforced via IOTA's native `DenyList` system object, not custom state. Contract-specific state (like `AllowlistState` or `DebtState`) is stored in separate `ComplianceState` objects only where needed.
 
 This enables **parallel execution** - multiple users can read token metadata simultaneously without blocking each other.
 
@@ -140,20 +141,23 @@ Instead of role mappings, we use capability objects:
 public struct AdminCap has key, store { id: UID }
 public struct MintCap has key, store { id: UID }
 public struct PauseCap has key, store { id: UID }
-public struct FreezeCap has key, store { id: UID }
+public struct EnforcerCap has key, store { id: UID }  // For freeze operations
 
-// Capability-protected function
-public entry fun mint(
-    mint_cap: &MintCap,  // ← Must possess this object
-    token: &mut LightCMTAT,
-    compliance_state: &ComplianceState,
+// Capability-protected function with native DenyList compliance
+public entry fun mint_and_transfer(
+    _mint_cap: &MintCap,  // ← Must possess this object
+    treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+    registry: &CMTATRegistry,
+    deny_list: &DenyList,
     to: address,
     amount: u64,
     ctx: &mut TxContext
 ) {
     // Only MintCap holder can call this - no role mapping lookup needed
-    pause::require_not_paused(&compliance_state.pause_state);
-    let coins = base::mint(&mut token.treasury_cap, amount, ctx);
+    assert!(!registry.deactivated, EModuleDeactivated);
+    assert!(!is_paused(deny_list, ctx), EModulePaused);
+    assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
+    let coins = coin::mint(treasury_cap, amount, ctx);
     transfer::public_transfer(coins, to);
 }
 ```
@@ -183,14 +187,15 @@ Each compliance feature is a separate component with its own state object:
 ┌─────────────────────────────────────────────────────────┐
 │              Shared Objects (Global State)              │
 │  ┌──────────────────┐  ┌──────────────────────────┐     │
-│  │   LightCMTAT     │  │    ComplianceState      │     │
-│  │ - TokenInfo      │  │ - PauseState             │     │
-│  │ - TreasuryCap    │  │ - FreezeState            │     │
-│  └──────────────────┘  │ - AllowlistState (opt)   │     │
-│                        └──────────────────────────┘     │
+│  │  CMTATRegistry   │  │    Native DenyList       │     │
+│  │ - terms          │  │  (System-level object)   │     │
+│  │ - document_uri   │  │ - Global pause state     │     │
+│  │ - deactivated    │  │ - Per-address freeze     │     │
+│  └──────────────────┘  └──────────────────────────┘     │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │              RuleEngine (optional)              │   │
-│  │ - Transfer validation logic                     │   │
+│  │   ComplianceState (contract-specific, optional) │   │
+│  │ - AllowlistState (allowlist_cmtat only)         │   │
+│  │ - DebtState (debt_cmtat only)                   │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -201,6 +206,66 @@ Each compliance feature is a separate component with its own state object:
 - Clear separation of concerns
 - Parallel-friendly
 - Upgradable components without redeploying entire contract
+
+### Native DenyList Compliance
+
+This implementation uses IOTA's **native DenyList** system for pause and freeze compliance, rather than custom state objects. This provides VM-level enforcement of compliance rules.
+
+#### How It Works
+
+```move
+// Pause: Uses global pause on the native DenyList
+public entry fun pause(
+    _pause_cap: &PauseCap,
+    deny_list: &mut DenyList,
+    deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
+    registry: &CMTATRegistry,
+    ctx: &mut TxContext
+) {
+    assert!(!registry.deactivated, EModuleDeactivated);
+    coin::deny_list_v1_enable_global_pause(deny_list, deny_cap, ctx);
+}
+
+// Freeze: Uses per-address deny on the native DenyList
+public entry fun set_address_frozen(
+    _enforcer_cap: &EnforcerCap,
+    deny_list: &mut DenyList,
+    deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
+    account: address,
+    frozen: bool,
+    ctx: &mut TxContext
+) {
+    if (frozen) {
+        coin::deny_list_v1_add(deny_list, deny_cap, account, ctx);
+    } else {
+        coin::deny_list_v1_remove(deny_list, deny_cap, account, ctx);
+    }
+}
+
+// Check compliance status
+public fun is_paused(deny_list: &DenyList, ctx: &TxContext): bool {
+    coin::deny_list_v1_is_global_pause_enabled_current_epoch<STANDARD_CMTAT>(deny_list, ctx)
+}
+
+public fun is_frozen(deny_list: &DenyList, account: address, ctx: &TxContext): bool {
+    coin::deny_list_v1_contains_current_epoch<STANDARD_CMTAT>(deny_list, account, ctx)
+}
+```
+
+#### Key Capabilities
+
+| Capability | Purpose |
+|-----------|---------|
+| `DenyCapV1<T>` | System capability for DenyList operations (pause/freeze) |
+| `PauseCap` | Business capability to authorize pause operations |
+| `EnforcerCap` | Business capability to authorize freeze operations |
+
+#### Epoch-Scoped Behavior
+
+DenyList changes are **epoch-scoped** - they take effect in the current epoch for new transactions. This provides:
+- Atomic compliance enforcement
+- Predictable state transitions
+- No race conditions between compliance checks and transfers
 
 ---
 
@@ -246,23 +311,21 @@ function transfer(address to, uint256 amount) public {
 // Balances are Coin<CMTAT> objects in user wallets
 // No balanceOf function - query wallet or use indexer
 
-// Transfer coins natively:
+// Transfer coins with native DenyList compliance:
 public entry fun transfer(
-    compliance_state: &ComplianceState,
-    coins: Coin<CMTAT>,
+    registry: &CMTATRegistry,
+    deny_list: &DenyList,
+    coins: Coin<STANDARD_CMTAT>,
     to: address,
     ctx: &TxContext
 ) {
-    // Validate first
-    let restriction = rule_engine::validate_transfer(
-        &compliance_state.pause_state,
-        &compliance_state.freeze_state,
-        tx_context::sender(ctx),
-        to,
-        coin::value(&coins),
-        coin::value(&coins)
-    );
-    rule_engine::require_valid_transfer(restriction);
+    let from = tx_context::sender(ctx);
+
+    // Validate via native DenyList
+    assert!(!registry.deactivated, EModuleDeactivated);
+    assert!(!is_paused(deny_list, ctx), EModulePaused);
+    assert!(!is_frozen(deny_list, from, ctx), EAddressFrozen);
+    assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
 
     // Native transfer
     transfer::public_transfer(coins, to);
@@ -306,17 +369,20 @@ function mint(address to, uint256 amount) public onlyMinter {
 public struct MintCap has key, store { id: UID }
 public struct AdminCap has key, store { id: UID }
 
-public entry fun mint(
-    mint_cap: &MintCap,  // Must possess this object
-    token: &mut LightCMTAT,
-    compliance_state: &ComplianceState,
+public entry fun mint_and_transfer(
+    _mint_cap: &MintCap,  // Must possess this object
+    treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+    registry: &CMTATRegistry,
+    deny_list: &DenyList,
     to: address,
     amount: u64,
     ctx: &mut TxContext
 ) {
     // Only MintCap holder can call this - no role mapping lookup
-    pause::require_not_paused(&compliance_state.pause_state);
-    let coins = base::mint(&mut token.treasury_cap, amount, ctx);
+    assert!(!registry.deactivated, EModuleDeactivated);
+    assert!(!is_paused(deny_list, ctx), EModulePaused);
+    assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
+    let coins = coin::mint(treasury_cap, amount, ctx);
     transfer::public_transfer(coins, to);
 }
 
@@ -324,7 +390,6 @@ public entry fun mint(
 public entry fun transfer_mint_capability(
     mint_cap: MintCap,
     to: address,
-    ctx: &mut TxContext
 ) {
     transfer::public_transfer(mint_cap, to);
 }
@@ -356,31 +421,31 @@ contract CMTAT {
 ```move
 // Separate shared objects for modularity
 
-// Token state
-public struct LightCMTAT has key {
+// Token registry (shared)
+public struct CMTATRegistry has key {
     id: UID,
-    token_info: TokenInfo,
-    treasury_cap: TreasuryCap<CMTAT>,
+    terms: String,
+    information: String,
+    token_id: String,
+    document_uri: String,
+    deactivated: bool,
 }
 
-// Compliance state
+// Native DenyList (system shared object)
+// - Handles pause/freeze compliance at VM level
+// - Accessed via coin::deny_list_v1_* functions
+
+// Contract-specific state (optional, shared)
 public struct ComplianceState has key {
     id: UID,
-    pause_state: PauseState,
-    freeze_state: FreezeState,
-    allowlist_state: AllowlistState,
-}
-
-// Rule engine
-public struct RuleEngine has key {
-    id: UID,
-    custom_rules: Table<u8, vector<u8>>,
+    allowlist_state: AllowlistState,  // allowlist_cmtat only
+    // OR debt_state: DebtState,      // debt_cmtat only
 }
 
 // Shared separately:
-transfer::share_object(token);        // Anyone can read
-transfer::share_object(compliance);   // Anyone can read
-transfer::share_object(rule_engine);  // Anyone can read
+transfer::share_object(registry);           // Anyone can read
+transfer::share_object(compliance_state);   // Anyone can read (if needed)
+// DenyList is a system object - always available
 ```
 
 **Why IOTA Native?**
@@ -488,19 +553,19 @@ iota client object <ComplianceState-object-id>
 **Minimal feature set for basic CMTAT compliance with IOTA native patterns**
 
 **IOTA Native Features:**
-- `Coin<CMTAT>` for user balances
-- `TreasuryCap<CMTAT>` for VM-enforced supply control
-- Capability objects: `AdminCap`, `MintCap`, `PauseCap`, `FreezeCap`
-- Shared objects: `LightCMTAT`, `ComplianceState`
+- `Coin<LIGHT_CMTAT>` for user balances
+- `TreasuryCap<LIGHT_CMTAT>` for VM-enforced supply control
+- `DenyCapV1<LIGHT_CMTAT>` for native DenyList compliance
+- Capability objects: `AdminCap`, `MinterCap`, `PauserCap`, `EnforcerCap`
+- Shared objects: `CMTATRegistry`, `LightCMTATState`
 
 **Features:**
-- Basic ERC20 functionality via `Coin<CMTAT>`
+- Basic ERC20 functionality via `Coin<T>`
 - Minting/burning (via TreasuryCap)
-- Pause/Unpause/Deactivate (via PauseState object)
-- Address freezing (via FreezeState object)
-- Information management (terms, information, token_id)
-- Batch balance queries
-- 4 Capability types (AdminCap, MintCap, PauseCap, FreezeCap)
+- Pause/Unpause/Deactivate (via native DenyList)
+- Address freezing (via native DenyList)
+- Information management (terms, information, token_id, document_uri)
+- 4 Capability types
 
 **Use Cases:** Standard token deployments, simple compliance requirements
 
@@ -511,16 +576,16 @@ iota client object <ComplianceState-object-id>
 **All Light features plus allowlist functionality**
 
 **IOTA Native Features:**
-- All Light CMTAT features
-- Extended Capability set: AllowlistCap, PartialFreezeCap, SnapshotCap, DocumentCap, ExtraInfoCap
-- Enhanced ComplianceState with AllowlistState
+- All Light CMTAT native features
+- `DenyCapV1<ALLOWLIST_CMTAT>` for native DenyList compliance
+- `ComplianceState` with `AllowlistState` for allowlist management
+- Extended Capability set: `AllowlistCap`
 
 **Additional Features:**
 - Allowlist control (enable_allowlist, set_address_allowlist)
-- Partial token freezing (freeze_partial_tokens, unfreeze_partial_tokens)
-- Active balance queries (get_active_balance_of)
-- Engine management (snapshot_engine, document_engine)
-- 9 Capability types
+- Transfer validation against allowlist
+- Snapshot engine for balance tracking
+- 7 Capability types (AdminCap, MintCap, BurnCap, PauseCap, EnforcerCap, SnapshotCap, AllowlistCap)
 
 **Use Cases:** Regulated tokens with whitelist requirements, KYC/AML compliance
 
@@ -531,16 +596,18 @@ iota client object <ComplianceState-object-id>
 **Specialized for debt securities with IOTA native architecture**
 
 **IOTA Native Features:**
-- All Allowlist CMTAT features
-- DebtState object for debt-specific tracking
-- DebtCap for debt management permissions
+- All Light CMTAT native features
+- `DenyCapV1<DEBT_CMTAT>` for native DenyList compliance
+- `ComplianceState` with `DebtState` for debt-specific tracking
+- `DebtCap` for debt management permissions
 
 **Debt-Specific Features:**
 - Debt information management (debt, set_debt)
 - Credit events tracking (credit_events, set_credit_events)
 - Debt engine integration (debt_engine, set_debt_engine)
 - Default flagging (flag_default)
-- 10 Capability types (includes DebtCap)
+- Snapshot engine for balance tracking
+- 7 Capability types (AdminCap, MintCap, BurnCap, PauseCap, EnforcerCap, SnapshotCap, DebtCap)
 
 **Use Cases:** Corporate bonds, structured debt products, fixed income securities
 
@@ -548,20 +615,23 @@ iota client object <ComplianceState-object-id>
 
 ### 🔹 Standard CMTAT
 
-**Full feature set with transfer validation**
+**Full feature set with native DenyList compliance**
 
 **IOTA Native Features:**
-- All native features from other variants
-- RuleEngine object for transfer validation logic
-- ValidationCap for validation management
+- `Coin<STANDARD_CMTAT>` for user balances
+- `TreasuryCap<STANDARD_CMTAT>` for VM-enforced supply control
+- `DenyCapV1<STANDARD_CMTAT>` for native DenyList compliance
+- Capability objects: `AdminCap`, `MintCap`, `BurnCap`, `PauseCap`, `EnforcerCap`, `SnapshotCap`
+- Shared objects: `CMTATRegistry`, `StandardCMTATState`
 
-**Advanced Features:**
-- Transfer validation (restriction_code, message_for_transfer_restriction)
-- ERC-1404 compliance via RuleEngine
-- All core CMTAT features
-- 9 Capability types
+**Features:**
+- All core CMTAT compliance features
+- Native DenyList for pause/freeze enforcement
+- Snapshot engine for balance tracking
+- Batch freeze operations
+- 6 Capability types
 
-**Use Cases:** Advanced compliance, institutional securities with transfer validation
+**Use Cases:** Standard compliant securities, institutional tokens
 
 ---
 
@@ -569,23 +639,22 @@ iota client object <ComplianceState-object-id>
 
 | Feature | Light | Allowlist | Debt | Standard |
 |---------|-------|-----------|------|----------|
-| **Native Coin<CMTAT>** | ✅ | ✅ | ✅ | ✅ |
+| **Native Coin<T>** | ✅ | ✅ | ✅ | ✅ |
 | **TreasuryCap Control** | ✅ | ✅ | ✅ | ✅ |
+| **Native DenyList Compliance** | ✅ | ✅ | ✅ | ✅ |
 | **Capability Objects** | ✅ | ✅ | ✅ | ✅ |
 | **Minting** | ✅ | ✅ | ✅ | ✅ |
 | **Burning** | ✅ | ✅ | ✅ | ✅ |
 | **Forced Burn** | ✅ | ❌ | ❌ | ❌ |
-| **Pause/Unpause** | ✅ | ✅ | ✅ | ✅ |
+| **Pause/Unpause (DenyList)** | ✅ | ✅ | ✅ | ✅ |
 | **Deactivation** | ✅ | ✅ | ✅ | ✅ |
-| **Address Freezing** | ✅ | ✅ | ✅ | ✅ |
-| **Partial Token Freezing** | ❌ | ✅ | ✅ | ✅ |
+| **Address Freezing (DenyList)** | ✅ | ✅ | ✅ | ✅ |
 | **Batch Operations** | ✅ | ✅ | ✅ | ✅ |
 | **Information Management** | ✅ | ✅ | ✅ | ✅ |
 | **Allowlist** | ❌ | ✅ | ❌ | ❌ |
 | **Debt Management** | ❌ | ❌ | ✅ | ❌ |
-| **Transfer Validation** | ❌ | ❌ | ❌ | ✅ |
-| **Engine Integration** | ❌ | ✅ | ✅ | ✅ |
-| **Capability Count** | 4 | 9 | 10 | 9 |
+| **Snapshot Engine** | ✅ | ✅ | ✅ | ✅ |
+| **Capability Count** | 4 | 7 | 7 | 6 |
 
 ---
 
@@ -598,15 +667,13 @@ move-cmtat/
 ├── sources/
 │   ├── contracts/
 │   │   ├── light_cmtat.move       # Minimal CMTAT (4 capabilities)
-│   │   ├── allowlist_cmtat.move   # With allowlist (9 capabilities)
-│   │   ├── debt_cmtat.move        # For debt securities (10 capabilities)
-│   │   └── standard_cmtat.move    # Full feature set (9 capabilities)
+│   │   ├── allowlist_cmtat.move   # With allowlist (7 capabilities)
+│   │   ├── debt_cmtat.move        # For debt securities (7 capabilities)
+│   │   └── standard_cmtat.move    # Standard feature set (6 capabilities)
 │   ├── engines/
-│   │   ├── rule_engine.move       # Transfer restrictions (ERC-1404)
+│   │   ├── rule_engine.move       # Allowlist validation
 │   │   └── snapshot_engine.move   # Balance snapshots
 │   ├── components/
-│   │   ├── pause.move             # PauseState object
-│   │   ├── freeze.move            # FreezeState object
 │   │   ├── allowlist.move         # AllowlistState object
 │   │   ├── debt.move              # DebtState object
 │   │   └── validation.move        # Validation logic
@@ -620,6 +687,8 @@ move-cmtat/
 └── scripts/
     └── deploy.sh                   # Deployment automation
 ```
+
+**Note:** Pause and freeze functionality is now handled by IOTA's native `DenyList` system object, not custom component modules.
 
 ---
 
@@ -635,34 +704,37 @@ This implementation uses IOTA Move's capability-based access control instead of 
 |-----------|---------|--------------|
 | `AdminCap` | Master administrator, can transfer other capabilities | ✅ Yes |
 | `MintCap` | Can mint new tokens | ✅ Yes |
-| `PauseCap` | Can pause/unpause contract | ✅ Yes |
-| `FreezeCap` | Can freeze/unfreeze addresses | ✅ Yes |
-| `AllowlistCap` | Can manage allowlist | ✅ Yes |
+| `BurnCap` | Can burn tokens | ✅ Yes |
+| `PauseCap` | Can pause/unpause contract via DenyList | ✅ Yes |
+| `EnforcerCap` | Can freeze/unfreeze addresses via DenyList | ✅ Yes |
 | `SnapshotCap` | Can create snapshots | ✅ Yes |
-| `DocumentCap` | Can manage documents | ✅ Yes |
-| `ExtraInfoCap` | Can update token metadata | ✅ Yes |
-| `DebtCap` | Can manage debt parameters | ✅ Yes |
+| `AllowlistCap` | Can manage allowlist (allowlist_cmtat only) | ✅ Yes |
+| `DebtCap` | Can manage debt parameters (debt_cmtat only) | ✅ Yes |
+| `DenyCapV1<T>` | System capability for DenyList operations | ✅ Yes |
 
 **How Capability Security Works:**
 
 ```move
 // To call a protected function, you must possess the capability object:
-public entry fun mint(
-    mint_cap: &MintCap,  // ← Must own this object
-    token: &mut LightCMTAT,
-    compliance_state: &ComplianceState,
+public entry fun mint_and_transfer(
+    _mint_cap: &MintCap,  // ← Must own this object
+    treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
+    registry: &CMTATRegistry,
+    deny_list: &DenyList,
     to: address,
     amount: u64,
     ctx: &mut TxContext
 ) {
-    // Function body...
+    // Only MintCap holder can call this
+    assert!(!is_paused(deny_list, ctx), EModulePaused);
+    let coins = coin::mint(treasury_cap, amount, ctx);
+    transfer::public_transfer(coins, to);
 }
 
 // Transfer capability to another address:
 public entry fun transfer_capability(
     capability: AdminCap,
     to: address,
-    ctx: &mut TxContext
 ) {
     transfer::public_transfer(capability, to);
 }
@@ -679,54 +751,50 @@ public entry fun transfer_capability(
 
 ## Transfer Restrictions
 
-All modules implement transfer restrictions via the RuleEngine component:
+All modules implement transfer restrictions via native DenyList and contract-specific validation:
 
-- Pause state check (`PauseState`)
-- Sender/recipient freeze check (`FreezeState`)
-- Active balance validation (for partial freezing)
-- Allowlist validation (via `AllowlistState`)
-- Custom validation (via transfer validation in Standard)
+- **Pause state check** (via native DenyList `coin::deny_list_v1_is_global_pause_enabled_current_epoch`)
+- **Sender/recipient freeze check** (via native DenyList `coin::deny_list_v1_contains_current_epoch`)
+- **Deactivation check** (via `CMTATRegistry.deactivated` flag)
+- **Allowlist validation** (via `AllowlistState` in allowlist_cmtat only)
 
-**Restriction Codes (ERC-1404 Compatible):**
-- `0`: No restriction
-- `1`: Address frozen
-- `2`: Insufficient active balance
-- `3`: Not allowlisted
-- `4`: Paused
-- `5`: Custom restriction
+**Error Codes:**
+- `EModuleDeactivated (0)`: Contract has been permanently deactivated
+- `EAddressFrozen (1)`: Sender or recipient is frozen
+- `EModulePaused (2)`: Contract is paused
+- `ENotAllowlisted (3)`: Address not on allowlist (allowlist_cmtat only)
 
 ---
 
 ## Compliance Features
 
-### Pause Mechanism
-- Circuit breaker for emergency stops
-- Permanent deactivation option
-- PauseState object shared across components
+### Pause Mechanism (Native DenyList)
+- Circuit breaker for emergency stops via `coin::deny_list_v1_enable_global_pause`
+- Permanent deactivation option via `CMTATRegistry.deactivated`
+- Epoch-scoped enforcement - changes take effect immediately for current epoch
 
-### Freezing
-- Full address freezing (cannot receive or send)
-- Partial token freezing (freeze specific amounts)
-- Frozen amounts tracked in FreezeState
-- Active balance calculation support
+### Freezing (Native DenyList)
+- Full address freezing via `coin::deny_list_v1_add` (cannot receive or send)
+- Batch freeze operations supported
+- Epoch-scoped enforcement
+- No partial token freezing - full address freeze only
 
-### Allowlist
+### Allowlist (allowlist_cmtat only)
 - Enable/disable allowlist requirement
 - Per-address allowlist status
-- Integration with partial freezing
+- Transfers require receiver to be allowlisted when enabled
 - KYC/AML compliance support
 
-### Transfer Validation
-- Centralized RuleEngine for validation logic
-- ERC-1404 compatible restriction codes
-- Detailed error messages for each restriction
-- Custom validation rules support
-
-### Debt Management
+### Debt Management (debt_cmtat only)
 - Debt information tracking
 - Credit events management
 - Debt engine integration
 - Default flagging
+
+### Snapshot Engine
+- Balance snapshot creation at specific timestamps
+- Total supply tracking
+- Available across all contract variants
 
 ---
 
