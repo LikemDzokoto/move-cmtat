@@ -1,25 +1,44 @@
-/// Debt CMTAT Test Suite - Comprehensive Testing for Debt Securities
+/// Debt CMTAT Test Suite - Updated for Pure Native DenyList
 #[test_only]
 module move_cmtat::debt_cmtat_tests_new {
     use std::string;
     use iota::test_scenario::{Self};
-    
-    use move_cmtat::debt_cmtat::{Self, CMTATRegistry, DebtCMTATState, ComplianceState,
-                                   AdminCap, PauseCap, DebtCap, FreezeCap, SnapshotCap};
+    use iota::coin::{DenyCapV1};
+    use iota::deny_list::{Self, DenyList};
+
+    use move_cmtat::debt_cmtat::{Self, DEBT_CMTAT, CMTATRegistry, DebtCMTATState, ComplianceState,
+                                   AdminCap, DebtCap, SnapshotCap};
 
     const ADMIN: address = @0xAD;
-    const USER1: address = @0x1;
     const DEBT_ENGINE: address = @0xDE;
+
+    // Helper to create DenyList and initialize token
+    fun setup(scenario: &mut test_scenario::Scenario) {
+        // Create DenyList as system address @0x0
+        test_scenario::next_tx(scenario, @0x0);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            deny_list::create_for_test(ctx);
+        };
+        // Initialize token as ADMIN
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::init_for_testing(ctx);
+        };
+    }
+
+    // Helper to take global DenyList
+    fun take_deny_list(scenario: &test_scenario::Scenario): DenyList {
+        test_scenario::take_shared<DenyList>(scenario)
+    }
 
     #[test]
     fun test_init_token() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -37,10 +56,7 @@ module move_cmtat::debt_cmtat_tests_new {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -64,10 +80,7 @@ module move_cmtat::debt_cmtat_tests_new {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -91,10 +104,7 @@ module move_cmtat::debt_cmtat_tests_new {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -117,10 +127,7 @@ module move_cmtat::debt_cmtat_tests_new {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -141,114 +148,29 @@ module move_cmtat::debt_cmtat_tests_new {
     }
 
     #[test]
-    fun test_pause_unpause() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
-            let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
-
-            assert!(!debt_cmtat::paused(&compliance_state), 0);
-
-            debt_cmtat::pause(&pause_cap, &mut compliance_state);
-            assert!(debt_cmtat::paused(&compliance_state), 1);
-
-            debt_cmtat::unpause(&pause_cap, &mut compliance_state);
-            assert!(!debt_cmtat::paused(&compliance_state), 2);
-
-            test_scenario::return_shared(compliance_state);
-            test_scenario::return_to_sender(scenario, pause_cap);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
     fun test_deactivate_contract() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
             let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
 
             assert!(!debt_cmtat::deactivated(&registry), 0);
 
-            debt_cmtat::deactivate_contract(&admin_cap, &mut registry, &mut compliance_state);
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::deactivate_contract(&admin_cap, &mut registry, &mut deny_list, &mut deny_cap, ctx);
             assert!(debt_cmtat::deactivated(&registry), 1);
 
             test_scenario::return_shared(registry);
-            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
             test_scenario::return_to_sender(scenario, admin_cap);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_freeze_address() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
-            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
-
-            assert!(!debt_cmtat::is_frozen(&compliance_state, USER1), 0);
-
-            debt_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, USER1, true);
-            assert!(debt_cmtat::is_frozen(&compliance_state, USER1), 1);
-
-            debt_cmtat::set_address_frozen(&freeze_cap, &mut compliance_state, USER1, false);
-            assert!(!debt_cmtat::is_frozen(&compliance_state, USER1), 2);
-
-            test_scenario::return_shared(compliance_state);
-            test_scenario::return_to_sender(scenario, freeze_cap);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_freeze_partial_tokens() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
-            let freeze_cap = test_scenario::take_from_sender<FreezeCap>(scenario);
-
-            debt_cmtat::freeze_partial_tokens(&freeze_cap, &mut compliance_state, USER1, 500);
-            debt_cmtat::unfreeze_partial_tokens(&freeze_cap, &mut compliance_state, USER1, 200);
-
-            test_scenario::return_shared(compliance_state);
-            test_scenario::return_to_sender(scenario, freeze_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
         };
 
         test_scenario::end(scenario_val);
@@ -259,10 +181,7 @@ module move_cmtat::debt_cmtat_tests_new {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -281,33 +200,54 @@ module move_cmtat::debt_cmtat_tests_new {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
-        {
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::init_for_testing(ctx);
-        };
+        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
             let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
 
-            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, 
+            debt_cmtat::set_debt(&debt_cap, &mut compliance_state,
                 string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"));
-            
+
             debt_cmtat::set_credit_events(&debt_cap, &mut compliance_state,
                 string::utf8(b"2024-06-30: Coupon payment $55,000"));
-            
+
             debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE);
 
-            assert!(debt_cmtat::debt(&compliance_state) == 
+            assert!(debt_cmtat::debt(&compliance_state) ==
                 string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"), 0);
-            assert!(debt_cmtat::credit_events(&compliance_state) == 
+            assert!(debt_cmtat::credit_events(&compliance_state) ==
                 string::utf8(b"2024-06-30: Coupon payment $55,000"), 1);
             assert!(debt_cmtat::debt_engine(&compliance_state) == DEBT_ENGINE, 2);
             assert!(!debt_cmtat::is_default_flagged(&compliance_state), 3);
 
             test_scenario::return_shared(compliance_state);
             test_scenario::return_to_sender(scenario, debt_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_view_functions() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            // Test native DenyList compliance views
+            assert!(!debt_cmtat::is_paused(&deny_list, ctx), 0);
+            assert!(!debt_cmtat::is_default_flagged(&compliance_state), 1);
+
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
         };
 
         test_scenario::end(scenario_val);

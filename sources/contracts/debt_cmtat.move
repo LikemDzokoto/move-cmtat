@@ -8,13 +8,9 @@ module move_cmtat::debt_cmtat {
 
     use iota::clock::{Self, Clock};
     use iota::event;
-    
-    use move_cmtat::pause;
-    use move_cmtat::freeze;
+
     use move_cmtat::debt;
-    use move_cmtat::rule_engine;
     use move_cmtat::snapshot_engine;
-    use move_cmtat::icmtat;
 
     // ========== ONE-TIME WITNESS ==========
     public struct DEBT_CMTAT has drop {}
@@ -35,11 +31,9 @@ module move_cmtat::debt_cmtat {
         snapshot_engine: snapshot_engine::SnapshotEngine,
     }
 
-    // ========== COMPLIANCE STATE (includes debt) ==========
+    // ========== COMPLIANCE STATE (debt only) ==========
     public struct ComplianceState has key {
         id: object::UID,
-        pause_state: pause::PauseState,
-        freeze_state: freeze::FreezeState,
         debt_state: debt::DebtState,
     }
 
@@ -47,7 +41,6 @@ module move_cmtat::debt_cmtat {
     public struct AdminCap has key, store { id: object::UID }
     public struct MintCap has key, store { id: object::UID }
     public struct BurnCap has key, store { id: object::UID }
-    public struct FreezeCap has key, store { id: object::UID }
     public struct PauseCap has key, store { id: object::UID }
     public struct SnapshotCap has key, store { id: object::UID }
     public struct DebtCap has key, store { id: object::UID }
@@ -76,6 +69,18 @@ module move_cmtat::debt_cmtat {
         account: address,
     }
 
+    public struct ModulePaused has copy, drop {
+        pauser: address,
+    }
+
+    public struct ModuleUnpaused has copy, drop {
+        pauser: address,
+    }
+
+    public struct ModuleDeactivated has copy, drop {
+        admin: address,
+    }
+
     public struct DebtFlagged has copy, drop {
         debt_cap_holder: address,
     }
@@ -84,7 +89,6 @@ module move_cmtat::debt_cmtat {
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
-    const ETransferRestricted: u64 = 3;
     const EDebtInDefault: u64 = 4;
 
     // ========== INIT FUNCTION ==========
@@ -117,11 +121,9 @@ module move_cmtat::debt_cmtat {
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
         };
 
-        // Create compliance state with debt state
+        // Create compliance state with debt state only
         let compliance_state = ComplianceState {
             id: object::new(ctx),
-            pause_state: pause::init_pause_state(ctx),
-            freeze_state: freeze::init_freeze_state(ctx),
             debt_state: debt::init_debt_state(ctx),
         };
 
@@ -130,7 +132,6 @@ module move_cmtat::debt_cmtat {
         let admin_cap = AdminCap { id: object::new(ctx) };
         let mint_cap = MintCap { id: object::new(ctx) };
         let burn_cap = BurnCap { id: object::new(ctx) };
-        let freeze_cap = FreezeCap { id: object::new(ctx) };
         let pause_cap = PauseCap { id: object::new(ctx) };
         let snapshot_cap = SnapshotCap { id: object::new(ctx) };
         let debt_cap = DebtCap { id: object::new(ctx) };
@@ -140,7 +141,7 @@ module move_cmtat::debt_cmtat {
         transfer::public_transfer(treasury_cap, deployer);
         transfer::public_transfer(deny_cap, deployer);
         transfer::public_freeze_object(coin_metadata);
-        
+
         transfer::share_object(registry);
         transfer::share_object(state);
         transfer::share_object(compliance_state);
@@ -148,7 +149,6 @@ module move_cmtat::debt_cmtat {
         transfer::transfer(admin_cap, deployer);
         transfer::transfer(mint_cap, deployer);
         transfer::transfer(burn_cap, deployer);
-        transfer::transfer(freeze_cap, deployer);
         transfer::transfer(pause_cap, deployer);
         transfer::transfer(snapshot_cap, deployer);
         transfer::transfer(debt_cap, deployer);
@@ -179,15 +179,16 @@ module move_cmtat::debt_cmtat {
     public fun document_uri(registry: &CMTATRegistry): String { registry.document_uri }
     public fun deactivated(registry: &CMTATRegistry): bool { registry.deactivated }
 
-    // ========== COMPLIANCE VIEWS ==========
-    public fun paused(compliance_state: &ComplianceState): bool {
-        pause::is_paused(&compliance_state.pause_state)
+    // ========== COMPLIANCE VIEWS (Native DenyList) ==========
+    public fun is_paused(deny_list: &deny_list::DenyList, ctx: &tx_context::TxContext): bool {
+        coin::deny_list_v1_is_global_pause_enabled_current_epoch<DEBT_CMTAT>(deny_list, ctx)
     }
 
-    public fun is_frozen(compliance_state: &ComplianceState, account: address): bool {
-        freeze::is_frozen(&compliance_state.freeze_state, account)
+    public fun is_frozen(deny_list: &deny_list::DenyList, account: address, ctx: &tx_context::TxContext): bool {
+        coin::deny_list_v1_contains_current_epoch<DEBT_CMTAT>(deny_list, account, ctx)
     }
 
+    // ========== DEBT-SPECIFIC VIEWS ==========
     public fun debt(compliance_state: &ComplianceState): String {
         debt::get_debt(&compliance_state.debt_state)
     }
@@ -202,14 +203,6 @@ module move_cmtat::debt_cmtat {
 
     public fun is_default_flagged(compliance_state: &ComplianceState): bool {
         debt::is_default_flagged(&compliance_state.debt_state)
-    }
-
-    public fun is_paused_native(deny_list: &deny_list::DenyList, ctx: &tx_context::TxContext): bool {
-        coin::deny_list_v1_is_global_pause_enabled_current_epoch<DEBT_CMTAT>(deny_list, ctx)
-    }
-
-    public fun is_frozen_native(deny_list: &deny_list::DenyList, account: address, ctx: &tx_context::TxContext): bool {
-        coin::deny_list_v1_contains_current_epoch<DEBT_CMTAT>(deny_list, account, ctx)
     }
 
     // ========== ADMINISTRATIVE FUNCTIONS ==========
@@ -276,7 +269,7 @@ module move_cmtat::debt_cmtat {
         ctx: &tx_context::TxContext
     ) {
         debt::flag_default(&mut compliance_state.debt_state);
-        
+
         event::emit(DebtFlagged {
             debt_cap_holder: tx_context::sender(ctx),
         });
@@ -294,11 +287,8 @@ module move_cmtat::debt_cmtat {
         ctx: &mut tx_context::TxContext
     ): Coin<DEBT_CMTAT> {
         assert!(!registry.deactivated, EModuleDeactivated);
-        assert!(!is_paused_native(deny_list, ctx), EModulePaused);
-        assert!(!is_frozen_native(deny_list, to, ctx), EAddressFrozen);
-        
-        pause::require_not_paused(&compliance_state.pause_state);
-        freeze::require_not_frozen(&compliance_state.freeze_state, to);
+        assert!(!is_paused(deny_list, ctx), EModulePaused);
+        assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
         debt::require_not_in_default(&compliance_state.debt_state);
 
         let coins = coin::mint(treasury_cap, amount, ctx);
@@ -347,29 +337,15 @@ module move_cmtat::debt_cmtat {
     public entry fun burn_entry(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         coins: Coin<DEBT_CMTAT>,
-        compliance_state: &ComplianceState,
+        deny_list: &deny_list::DenyList,
         ctx: &tx_context::TxContext
     ) {
-        pause::require_not_paused(&compliance_state.pause_state);
+        assert!(!is_paused(deny_list, ctx), EModulePaused);
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS ==========
+    // ========== PAUSE FUNCTIONS (Native DenyList) ==========
     public entry fun pause(
-        _pause_cap: &PauseCap,
-        compliance_state: &mut ComplianceState
-    ) {
-        pause::pause(&mut compliance_state.pause_state);
-    }
-
-    public entry fun unpause(
-        _pause_cap: &PauseCap,
-        compliance_state: &mut ComplianceState
-    ) {
-        pause::unpause(&mut compliance_state.pause_state);
-    }
-
-    public entry fun pause_native(
         _pause_cap: &PauseCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
@@ -378,9 +354,13 @@ module move_cmtat::debt_cmtat {
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         coin::deny_list_v1_enable_global_pause(deny_list, deny_cap, ctx);
+
+        event::emit(ModulePaused {
+            pauser: tx_context::sender(ctx),
+        });
     }
 
-    public entry fun unpause_native(
+    public entry fun unpause(
         _pause_cap: &PauseCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
@@ -389,28 +369,29 @@ module move_cmtat::debt_cmtat {
     ) {
         assert!(!registry.deactivated, EModuleDeactivated);
         coin::deny_list_v1_disable_global_pause(deny_list, deny_cap, ctx);
+
+        event::emit(ModuleUnpaused {
+            pauser: tx_context::sender(ctx),
+        });
     }
 
     public entry fun deactivate_contract(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        compliance_state: &mut ComplianceState
+        deny_list: &mut deny_list::DenyList,
+        deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
+        ctx: &mut tx_context::TxContext
     ) {
         registry.deactivated = true;
-        pause::deactivate(&mut compliance_state.pause_state);
+        coin::deny_list_v1_enable_global_pause(deny_list, deny_cap, ctx);
+
+        event::emit(ModuleDeactivated {
+            admin: tx_context::sender(ctx),
+        });
     }
 
-    // ========== FREEZE FUNCTIONS ==========
+    // ========== FREEZE FUNCTIONS (Native DenyList) ==========
     public entry fun set_address_frozen(
-        _freeze_cap: &FreezeCap,
-        compliance_state: &mut ComplianceState,
-        account: address,
-        frozen: bool
-    ) {
-        freeze::set_address_frozen(&mut compliance_state.freeze_state, account, frozen);
-    }
-
-    public entry fun set_address_frozen_native(
         _enforcer_cap: &EnforcerCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
@@ -429,22 +410,26 @@ module move_cmtat::debt_cmtat {
         }
     }
 
-    public entry fun freeze_partial_tokens(
-        _freeze_cap: &FreezeCap,
-        compliance_state: &mut ComplianceState,
-        account: address,
-        amount: u64
+    public entry fun batch_set_address_frozen(
+        enforcer_cap: &EnforcerCap,
+        deny_list: &mut deny_list::DenyList,
+        deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
+        accounts: vector<address>,
+        statuses: vector<bool>,
+        ctx: &mut tx_context::TxContext
     ) {
-        freeze::freeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
-    }
+        let len = vector::length(&accounts);
+        assert!(len == vector::length(&statuses), 0);
 
-    public entry fun unfreeze_partial_tokens(
-        _freeze_cap: &FreezeCap,
-        compliance_state: &mut ComplianceState,
-        account: address,
-        amount: u64
-    ) {
-        freeze::unfreeze_partial_tokens(&mut compliance_state.freeze_state, account, amount);
+        let mut i = 0;
+        while (i < len) {
+            let account = *vector::borrow(&accounts, i);
+            let status = *vector::borrow(&statuses, i);
+
+            set_address_frozen(enforcer_cap, deny_list, deny_cap, account, status, ctx);
+
+            i = i + 1;
+        }
     }
 
     // ========== SNAPSHOT FUNCTIONS ==========
@@ -471,7 +456,6 @@ module move_cmtat::debt_cmtat {
         ctx: &tx_context::TxContext
     ) {
         let from = tx_context::sender(ctx);
-        let amount = coin::value(&coins);
 
         // Check deactivation
         assert!(!registry.deactivated, EModuleDeactivated);
@@ -480,21 +464,9 @@ module move_cmtat::debt_cmtat {
         assert!(!is_default_flagged(compliance_state), EDebtInDefault);
 
         // Check native DenyList
-        assert!(!is_paused_native(deny_list, ctx), EModulePaused);
-        assert!(!is_frozen_native(deny_list, from, ctx), EAddressFrozen);
-        assert!(!is_frozen_native(deny_list, to, ctx), EAddressFrozen);
-
-        // Validate transfer using rule engine
-        let restriction_code = rule_engine::validate_transfer(
-            &compliance_state.pause_state,
-            &compliance_state.freeze_state,
-            from,
-            to,
-            amount,
-            amount
-        );
-
-        assert!(restriction_code == icmtat::restriction_code_valid(), ETransferRestricted);
+        assert!(!is_paused(deny_list, ctx), EModulePaused);
+        assert!(!is_frozen(deny_list, from, ctx), EAddressFrozen);
+        assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
 
         // Transfer the coins
         transfer::public_transfer(coins, to);
