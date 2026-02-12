@@ -41,6 +41,82 @@ module move_cmtat::debt {
         Unadjusted,         // No adjustment
     }
 
+    // ========== DAY COUNT CONVENTION CONSTANTS ==========
+    /// For external modules that can't match on enums
+    const DAY_COUNT_THIRTY360: u8 = 0;
+    const DAY_COUNT_ACTUAL360: u8 = 1;
+    const DAY_COUNT_ACTUAL365: u8 = 2;
+    const DAY_COUNT_ACTUALACTUAL: u8 = 3;
+
+    // ========== BUSINESS DAY CONVENTION CONSTANTS ==========
+    const BDC_FOLLOWING: u8 = 0;
+    const BDC_MODIFIED_FOLLOWING: u8 = 1;
+    const BDC_PRECEDING: u8 = 2;
+    const BDC_UNADJUSTED: u8 = 3;
+
+    // ========== ENUM CONVERSION FUNCTIONS ==========
+
+    /// Convert DayCountConvention to u8 constant
+    public fun day_count_to_u8(convention: &DayCountConvention): u8 {
+        match (convention) {
+            DayCountConvention::Thirty360 => DAY_COUNT_THIRTY360,
+            DayCountConvention::Actual360 => DAY_COUNT_ACTUAL360,
+            DayCountConvention::Actual365 => DAY_COUNT_ACTUAL365,
+            DayCountConvention::ActualActual => DAY_COUNT_ACTUALACTUAL,
+        }
+    }
+
+    /// Convert u8 constant to DayCountConvention
+    public fun u8_to_day_count(value: u8): DayCountConvention {
+        if (value == DAY_COUNT_THIRTY360) {
+            DayCountConvention::Thirty360
+        } else if (value == DAY_COUNT_ACTUAL360) {
+            DayCountConvention::Actual360
+        } else if (value == DAY_COUNT_ACTUAL365) {
+            DayCountConvention::Actual365
+        } else {
+            DayCountConvention::ActualActual
+        }
+    }
+
+    /// Convert BusinessDayConvention to u8 constant
+    public fun business_day_to_u8(convention: &BusinessDayConvention): u8 {
+        match (convention) {
+            BusinessDayConvention::Following => BDC_FOLLOWING,
+            BusinessDayConvention::ModifiedFollowing => BDC_MODIFIED_FOLLOWING,
+            BusinessDayConvention::Preceding => BDC_PRECEDING,
+            BusinessDayConvention::Unadjusted => BDC_UNADJUSTED,
+        }
+    }
+
+    /// Convert u8 constant to BusinessDayConvention
+    public fun u8_to_business_day(value: u8): BusinessDayConvention {
+        if (value == BDC_FOLLOWING) {
+            BusinessDayConvention::Following
+        } else if (value == BDC_MODIFIED_FOLLOWING) {
+            BusinessDayConvention::ModifiedFollowing
+        } else if (value == BDC_PRECEDING) {
+            BusinessDayConvention::Preceding
+        } else {
+            BusinessDayConvention::Unadjusted
+        }
+    }
+
+    // ========== CONSTANT GETTERS ==========
+    /// Getters for day count constants (for external modules)
+    
+    public fun day_count_thirty360(): u8 { DAY_COUNT_THIRTY360 }
+    public fun day_count_actual360(): u8 { DAY_COUNT_ACTUAL360 }
+    public fun day_count_actual365(): u8 { DAY_COUNT_ACTUAL365 }
+    public fun day_count_actualactual(): u8 { DAY_COUNT_ACTUALACTUAL }
+
+    /// Getters for business day convention constants
+    
+    public fun bdc_following(): u8 { BDC_FOLLOWING }
+    public fun bdc_modified_following(): u8 { BDC_MODIFIED_FOLLOWING }
+    public fun bdc_preceding(): u8 { BDC_PRECEDING }
+    public fun bdc_unadjusted(): u8 { BDC_UNADJUSTED }
+
     // ========== DATA STRUCTURES ==========
     
     /// DebtIdentifier - Entity identification for regulatory compliance
@@ -277,6 +353,60 @@ module move_cmtat::debt {
     public fun get_debt(state: &DebtState): String { state.debt_info_legacy }
     public fun get_credit_events_legacy(state: &DebtState): String { state.credit_events_legacy }
     public fun is_default_flagged(state: &DebtState): bool { state.credit_events.flag_default }
+
+    // ========== DIRECT CREDITEVENTS GETTERS ==========
+    /// Getters for CreditEvents struct (for external modules)
+    
+    public fun get_credit_events(state: &DebtState): CreditEvents {
+        state.credit_events
+    }
+
+    public fun credit_events_is_default(events: &CreditEvents): bool { events.flag_default }
+    public fun credit_events_is_redeemed(events: &CreditEvents): bool { events.flag_redeemed }
+    public fun credit_events_is_matured(events: &CreditEvents): bool { events.flag_matured }
+    public fun credit_events_get_rating(events: &CreditEvents): String { events.rating }
+    public fun credit_events_get_principal_distributed(events: &CreditEvents): u64 { events.principal_distributed }
+    public fun credit_events_get_next_coupon_date(events: &CreditEvents): u64 { events.next_coupon_date }
+
+    // ========== DIRECT DEBTIDENTIFIER GETTERS ==========
+    /// Getters for DebtIdentifier struct (for external modules)
+    
+    public fun identifier_get_issuer_name(id: &DebtIdentifier): String { id.issuer_name }
+    public fun identifier_get_isin(id: &DebtIdentifier): String { id.isin }
+
+    // ========== DIRECT DEBTINSTRUMENT GETTERS ==========
+    /// Getters for DebtInstrument struct (for external modules)
+    
+    public fun instrument_get_interest_rate(inst: &DebtInstrument): u64 { inst.interest_rate }
+    public fun instrument_get_maturity_date(inst: &DebtInstrument): u64 { inst.maturity_date }
+    public fun instrument_get_par_value(inst: &DebtInstrument): u64 { inst.par_value }
+
+    // ========== CREDITEVENTS SETTERS (Direct) ==========
+    /// Setters for CreditEvents struct (for external modules)
+    
+    public fun credit_events_flag_default(events: &mut CreditEvents) {
+        events.flag_default = true;
+    }
+    
+    public fun credit_events_clear_default(events: &mut CreditEvents) {
+        events.flag_default = false;
+    }
+    
+    public fun credit_events_flag_redeemed(events: &mut CreditEvents) {
+        events.flag_redeemed = true;
+    }
+    
+    public fun credit_events_flag_matured(events: &mut CreditEvents) {
+        events.flag_matured = true;
+    }
+    
+    public fun credit_events_set_rating(events: &mut CreditEvents, rating: String) {
+        events.rating = rating;
+    }
+    
+    public fun credit_events_record_principal(events: &mut CreditEvents, amount: u64) {
+        events.principal_distributed = events.principal_distributed + amount;
+    }
 
     // ========== DEBTIDENTIFIER SETTERS ==========
     

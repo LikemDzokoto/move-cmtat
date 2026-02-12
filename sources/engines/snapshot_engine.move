@@ -298,7 +298,7 @@ module move_cmtat::snapshot_engine {
 
     /// Get all snapshot IDs
     public fun get_all_snapshot_ids(engine: &SnapshotEngine): vector<u64> {
-        let ids = vector::empty<u64>();
+        let mut ids = vector::empty<u64>();
         let mut i = 0;
         
         while (i < engine.snapshot_counter) {
@@ -362,7 +362,7 @@ module move_cmtat::snapshot_engine {
         start_time: u64,
         end_time: u64
     ): vector<u64> {
-        let ids = vector::empty<u64>();
+        let mut ids = vector::empty<u64>();
         
         let mut i = 0;
         while (i < engine.snapshot_counter) {

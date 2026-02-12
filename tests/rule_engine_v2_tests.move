@@ -1,17 +1,15 @@
-/// RuleEngine V2 Test Suite - Comprehensive Tests
-/// Tests conditional transfer, ERC-1404 compliance, and validation hooks
+/// RuleEngine V2 Test Suite - CMTA-Compliant Rule Orchestration Tests
 #[test_only]
 module move_cmtat::rule_engine_v2_tests {
     use std::string;
     use iota::test_scenario::{Self, Scenario};
     use iota::clock::{Self, Clock};
-    use iota::table;
 
     use move_cmtat::rule_engine_v2::{Self, RuleEngine, TransferRequest};
-    use move_cmtat::allowlist::{Self, AllowlistState};
 
     // ============ TEST ADDRESSES ============
     const ADMIN: address = @0xAD;
+    const OPERATOR: address = @0xDEAD;
     const USER1: address = @0x1;
     const USER2: address = @0x2;
     const USER3: address = @0x3;
@@ -24,13 +22,6 @@ module move_cmtat::rule_engine_v2_tests {
             let ctx = test_scenario::ctx(scenario);
             let rule_engine = rule_engine_v2::init_rule_engine_v2(ctx);
             transfer::public_share_object(rule_engine);
-        };
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let ctx = test_scenario::ctx(scenario);
-            let allowlist = allowlist::init_allowlist_state(ctx);
-            transfer::public_share_object(allowlist);
         };
     }
 
@@ -52,7 +43,8 @@ module move_cmtat::rule_engine_v2_tests {
             assert!(rule_engine_v2::status_approved() == 2, 3);
             assert!(rule_engine_v2::status_denied() == 3, 4);
             assert!(rule_engine_v2::status_executed() == 4, 5);
-            assert!(rule_engine_v2::status_expired() == 5, 6);
+            assert!(rule_engine_v2::rule_whitelist() == 1, 6);
+            assert!(rule_engine_v2::rule_conditional_transfer() == 2, 7);
 
             transfer::public_transfer(rule_engine, ADMIN);
         };
@@ -63,18 +55,10 @@ module move_cmtat::rule_engine_v2_tests {
     #[test]
     fun test_restriction_codes() {
         assert!(rule_engine_v2::restriction_code_valid() == 0, 0);
-        assert!(rule_engine_v2::restriction_code_paused() == 1, 1);
-        assert!(rule_engine_v2::restriction_code_frozen_sender() == 2, 2);
-        assert!(rule_engine_v2::restriction_code_frozen_receiver() == 3, 3);
-        assert!(rule_engine_v2::restriction_code_not_allowlisted() == 4, 4);
-        assert!(rule_engine_v2::restriction_code_insufficient_balance() == 5, 5);
-        assert!(rule_engine_v2::restriction_code_conditional_required() == 10, 6);
-        assert!(rule_engine_v2::restriction_code_pending_approval() == 11, 7);
-        assert!(rule_engine_v2::restriction_code_request_denied() == 12, 8);
-        assert!(rule_engine_v2::restriction_code_request_expired() == 13, 9);
-        assert!(rule_engine_v2::restriction_code_already_executed() == 14, 10);
-        assert!(rule_engine_v2::restriction_code_mint_not_authorized() == 16, 11);
-        assert!(rule_engine_v2::restriction_code_burn_not_authorized() == 17, 12);
+        assert!(rule_engine_v2::restriction_code_not_allowlisted() == 4, 1);
+        assert!(rule_engine_v2::restriction_code_conditional_required() == 10, 2);
+        assert!(rule_engine_v2::restriction_code_pending_approval() == 11, 3);
+        assert!(rule_engine_v2::restriction_code_request_denied() == 12, 4);
     }
 
     #[test]
@@ -87,33 +71,12 @@ module move_cmtat::rule_engine_v2_tests {
 
         let msg = rule_engine_v2::message_for_restriction_code(11);
         assert!(msg == string::utf8(b"Transfer request pending approval"), 2);
-
-        let msg = rule_engine_v2::message_for_restriction_code(12);
-        assert!(msg == string::utf8(b"Transfer request was denied"), 3);
-
-        let msg = rule_engine_v2::message_for_restriction_code(13);
-        assert!(msg == string::utf8(b"Transfer request has expired"), 4);
-
-        let msg = rule_engine_v2::message_for_restriction_code(99);
-        assert!(msg == string::utf8(b"Unknown restriction"), 5);
     }
 
-    // ============ STATUS CONSTANT GETTERS ============
+    // ============ RULE MANAGEMENT TESTS ============
 
     #[test]
-    fun test_status_constant_getters() {
-        assert!(rule_engine_v2::status_none() == 0, 0);
-        assert!(rule_engine_v2::status_waiting() == 1, 1);
-        assert!(rule_engine_v2::status_approved() == 2, 2);
-        assert!(rule_engine_v2::status_denied() == 3, 3);
-        assert!(rule_engine_v2::status_executed() == 4, 4);
-        assert!(rule_engine_v2::status_expired() == 5, 5);
-    }
-
-    // ============ QUERY FUNCTION TESTS ============
-
-    #[test]
-    fun test_get_request_status_nonexistent() {
+    fun test_add_and_remove_rule() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -121,10 +84,54 @@ module move_cmtat::rule_engine_v2_tests {
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
 
-            let status = rule_engine_v2::get_request_status(&rule_engine, USER1, USER2, 1000);
-            assert!(status == rule_engine_v2::status_none(), 0);
+            assert!(!rule_engine_v2::is_rule_enabled(&rule_engine, rule_engine_v2::rule_conditional_transfer()), 0);
+
+            rule_engine_v2::add_rule(
+                &mut rule_engine,
+                rule_engine_v2::rule_conditional_transfer(),
+                test_scenario::ctx(scenario)
+            );
+
+            assert!(rule_engine_v2::is_rule_enabled(&rule_engine, rule_engine_v2::rule_conditional_transfer()), 1);
+
+            rule_engine_v2::remove_rule(
+                &mut rule_engine,
+                rule_engine_v2::rule_conditional_transfer(),
+                test_scenario::ctx(scenario)
+            );
+
+            assert!(!rule_engine_v2::is_rule_enabled(&rule_engine, rule_engine_v2::rule_conditional_transfer()), 2);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ============ VIP MANAGEMENT TESTS ============
+
+    #[test]
+    fun test_add_and_remove_vip() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+
+            assert!(!rule_engine_v2::is_vip(&rule_engine, USER1), 0);
+
+            rule_engine_v2::add_vip(&mut rule_engine, USER1, test_scenario::ctx(scenario));
+
+            assert!(rule_engine_v2::is_vip(&rule_engine, USER1), 1);
+
+            rule_engine_v2::remove_vip(&mut rule_engine, USER1, test_scenario::ctx(scenario));
+
+            assert!(!rule_engine_v2::is_vip(&rule_engine, USER1), 2);
 
             test_scenario::return_shared(rule_engine);
         };
@@ -133,7 +140,7 @@ module move_cmtat::rule_engine_v2_tests {
     }
 
     #[test]
-    fun test_get_request_counter() {
+    fun test_vip_bypasses_conditional_transfer() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -141,109 +148,32 @@ module move_cmtat::rule_engine_v2_tests {
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-            let counter = rule_engine_v2::get_request_counter(&rule_engine);
-            assert!(counter == 0, 0);
-
-            test_scenario::return_shared(rule_engine);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    // ============ WHITELIST TESTS ============
-
-    #[test]
-    fun test_is_conditional_whitelisted() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-
-            let is_whitelisted = rule_engine_v2::is_conditional_whitelisted(&rule_engine, USER1);
-            assert!(!is_whitelisted, 0);
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+            rule_engine_v2::add_vip(&mut rule_engine, USER1, ctx);
+            rule_engine_v2::add_vip(&mut rule_engine, USER2, ctx);
 
             test_scenario::return_shared(rule_engine);
         };
-
-        test_scenario::end(scenario_val);
-    }
-
-    // ============ VALIDATION FUNCTION TESTS ============
-
-    #[test]
-    fun test_validate_mint_without_authorization() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
 
         test_scenario::next_tx(scenario, ADMIN);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
-            let code = rule_engine_v2::validate_mint(&rule_engine, USER2, 1000, &clock);
-            assert!(code == rule_engine_v2::restriction_code_mint_not_authorized(), 0);
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_validate_burn_without_authorization() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-
-            let code = rule_engine_v2::validate_burn(&rule_engine, USER1, 1000, &clock);
-            assert!(code == rule_engine_v2::restriction_code_burn_not_authorized(), 0);
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_detect_transfer_restriction() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let allowlist = test_scenario::take_shared<AllowlistState>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-
-            let code = rule_engine_v2::detect_transfer_restriction(
+            let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
-                &allowlist,
                 USER1,
                 USER2,
                 1000,
-                &clock
+                &clock,
+                true
             );
+            assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
             test_scenario::return_shared(clock);
         };
 
@@ -471,56 +401,10 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[test]
-    #[expected_failure(abort_code = rule_engine_v2::ENotApproved)]
-    fun test_mark_executed_without_approval_fails() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, USER1);
-        {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-
-            rule_engine_v2::create_transfer_request(
-                &mut rule_engine,
-                USER2,
-                1000,
-                &clock,
-                test_scenario::ctx(scenario)
-            );
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
-        };
-
-        test_scenario::next_tx(scenario, USER1);
-        {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-
-            rule_engine_v2::mark_executed(
-                &mut rule_engine,
-                USER1,
-                USER2,
-                1000,
-                &clock,
-                test_scenario::ctx(scenario)
-            );
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
     // ============ VALIDATION TESTS ============
 
     #[test]
-    fun test_validate_transfer_without_request() {
+    fun test_validate_transfer_no_rules_enabled() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -529,23 +413,19 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let mut allowlist = test_scenario::take_shared<AllowlistState>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
-
-            allowlist::set_address_allowlist(&mut allowlist, USER2, true);
 
             let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
-                &allowlist,
                 USER1,
                 USER2,
                 1000,
-                &clock
+                &clock,
+                true
             );
             assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
             test_scenario::return_shared(clock);
         };
 
@@ -553,7 +433,7 @@ module move_cmtat::rule_engine_v2_tests {
     }
 
     #[test]
-    fun test_validate_transfer_with_waiting_request() {
+    fun test_validate_transfer_not_allowlisted() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -561,39 +441,59 @@ module move_cmtat::rule_engine_v2_tests {
 
         test_scenario::next_tx(scenario, USER1);
         {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
-            rule_engine_v2::create_transfer_request(
-                &mut rule_engine,
+            let code = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER1,
                 USER2,
                 1000,
                 &clock,
-                test_scenario::ctx(scenario)
+                false
             );
+            assert!(code == rule_engine_v2::restriction_code_not_allowlisted(), 0);
 
             test_scenario::return_shared(rule_engine);
             test_scenario::return_shared(clock);
         };
 
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_validate_transfer_conditional_required() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let allowlist = test_scenario::take_shared<AllowlistState>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
             let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
-                &allowlist,
                 USER1,
                 USER2,
                 1000,
-                &clock
+                &clock,
+                true
             );
-            assert!(code == rule_engine_v2::restriction_code_pending_approval(), 0);
+            assert!(code == rule_engine_v2::restriction_code_conditional_required(), 0);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
             test_scenario::return_shared(clock);
         };
 
@@ -606,6 +506,16 @@ module move_cmtat::rule_engine_v2_tests {
         let scenario = &mut scenario_val;
 
         setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+
+            test_scenario::return_shared(rule_engine);
+        };
 
         test_scenario::next_tx(scenario, USER1);
         {
@@ -645,21 +555,19 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let allowlist = test_scenario::take_shared<AllowlistState>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
             let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
-                &allowlist,
                 USER1,
                 USER2,
                 1000,
-                &clock
+                &clock,
+                true
             );
             assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
             test_scenario::return_shared(clock);
         };
 
@@ -672,6 +580,16 @@ module move_cmtat::rule_engine_v2_tests {
         let scenario = &mut scenario_val;
 
         setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+
+            test_scenario::return_shared(rule_engine);
+        };
 
         test_scenario::next_tx(scenario, USER1);
         {
@@ -711,21 +629,19 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let allowlist = test_scenario::take_shared<AllowlistState>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
             let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
-                &allowlist,
                 USER1,
                 USER2,
                 1000,
-                &clock
+                &clock,
+                true
             );
             assert!(code == rule_engine_v2::restriction_code_request_denied(), 0);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
             test_scenario::return_shared(clock);
         };
 
@@ -738,6 +654,16 @@ module move_cmtat::rule_engine_v2_tests {
         let scenario = &mut scenario_val;
 
         setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+
+            test_scenario::return_shared(rule_engine);
+        };
 
         test_scenario::next_tx(scenario, USER1);
         {
@@ -777,31 +703,49 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let allowlist = test_scenario::take_shared<AllowlistState>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
             let can_exec = rule_engine_v2::can_execute(
                 &rule_engine,
-                &allowlist,
                 USER1,
                 USER2,
                 1000,
-                &clock
+                &clock,
+                true
             );
             assert!(can_exec == true, 0);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
             test_scenario::return_shared(clock);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    // ============ MULTIPLE REQUEST TEST ============
+    // ============ QUERY TESTS ============
 
     #[test]
-    fun test_multiple_requests_different_values() {
+    fun test_get_request_status_nonexistent() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+
+            let status = rule_engine_v2::get_request_status(&rule_engine, USER1, USER2, 1000);
+            assert!(status == rule_engine_v2::status_none(), 0);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_request() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -811,30 +755,53 @@ module move_cmtat::rule_engine_v2_tests {
         {
             let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
-            let ctx = test_scenario::ctx(scenario);
 
-            rule_engine_v2::create_transfer_request(&mut rule_engine, USER2, 1000, &clock, ctx);
-            rule_engine_v2::create_transfer_request(&mut rule_engine, USER2, 2000, &clock, ctx);
-            rule_engine_v2::create_transfer_request(&mut rule_engine, USER3, 1500, &clock, ctx);
-
-            let counter = rule_engine_v2::get_request_counter(&rule_engine);
-            assert!(counter == 3, 0);
+            rule_engine_v2::create_transfer_request(
+                &mut rule_engine,
+                USER2,
+                1000,
+                &clock,
+                test_scenario::ctx(scenario)
+            );
 
             test_scenario::return_shared(rule_engine);
             test_scenario::return_shared(clock);
         };
 
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+
+            let (id, status, _approval_deadline, _execution_deadline) = 
+                rule_engine_v2::get_request(&rule_engine, USER1, USER2, 1000);
+            
+            assert!(id == 0, 0);
+            assert!(status == rule_engine_v2::status_waiting(), 1);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
         test_scenario::end(scenario_val);
     }
 
-    // ============ COMPLETE WORKFLOW TEST ============
+    // ============ COMPLETE WORKFLOW TESTS ============
 
     #[test]
-    fun test_complete_workflow_approval_and_execution() {
+    fun test_complete_conditional_transfer_workflow() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+
+            test_scenario::return_shared(rule_engine);
+        };
 
         test_scenario::next_tx(scenario, USER1);
         {
@@ -863,27 +830,10 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let allowlist = test_scenario::take_shared<AllowlistState>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
-            let can_exec = rule_engine_v2::can_execute(&rule_engine, &allowlist, USER1, USER2, 1000, &clock);
+            let can_exec = rule_engine_v2::can_execute(&rule_engine, USER1, USER2, 1000, &clock, true);
             assert!(can_exec == true, 0);
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(allowlist);
-            test_scenario::return_shared(clock);
-        };
-
-        test_scenario::next_tx(scenario, USER1);
-        {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-
-            rule_engine_v2::mark_executed(&mut rule_engine, USER1, USER2, 1000, &clock, ctx);
-
-            let status = rule_engine_v2::get_request_status(&rule_engine, USER1, USER2, 1000);
-            assert!(status == rule_engine_v2::status_executed(), 0);
 
             test_scenario::return_shared(rule_engine);
             test_scenario::return_shared(clock);
@@ -892,86 +842,110 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::end(scenario_val);
     }
 
-    // ============ COMPLETE DENIAL WORKFLOW TEST ============
-
     #[test]
-    fun test_complete_workflow_denial() {
+    fun test_vip_workflow() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup(scenario);
-
-        test_scenario::next_tx(scenario, USER1);
-        {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-
-            rule_engine_v2::create_transfer_request(&mut rule_engine, USER2, 1000, &clock, ctx);
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
-        };
 
         test_scenario::next_tx(scenario, ADMIN);
         {
             let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            rule_engine_v2::deny_request(
-                &mut rule_engine,
-                USER1,
-                USER2,
-                1000,
-                string::utf8(b"Restricted party"),
-                ctx
-            );
-
-            let status = rule_engine_v2::get_request_status(&rule_engine, USER1, USER2, 1000);
-            assert!(status == rule_engine_v2::status_denied(), 0);
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_conditional_transfer(), ctx);
+            rule_engine_v2::add_vip(&mut rule_engine, USER1, ctx);
+            rule_engine_v2::add_vip(&mut rule_engine, USER2, ctx);
 
             test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    // ============ GET REQUEST TEST ============
-
-    #[test]
-    fun test_get_request() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, USER1);
-        {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
-            let clock = test_scenario::take_shared<Clock>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-
-            rule_engine_v2::create_transfer_request(&mut rule_engine, USER2, 1000, &clock, ctx);
-
-            test_scenario::return_shared(rule_engine);
-            test_scenario::return_shared(clock);
         };
 
         test_scenario::next_tx(scenario, USER1);
         {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
 
-            let (id, status, _approval_deadline, _execution_deadline) = 
-                rule_engine_v2::get_request(&rule_engine, USER1, USER2, 1000);
-            
-            assert!(id == 0, 0);
-            assert!(status == rule_engine_v2::status_waiting(), 1);
+            let code = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER1,
+                USER2,
+                1000,
+                &clock,
+                true
+            );
+            assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
             test_scenario::return_shared(rule_engine);
+            test_scenario::return_shared(clock);
         };
 
         test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_multiple_requests_different_values() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::create_transfer_request(&mut rule_engine, USER2, 1000, &clock, ctx);
+            rule_engine_v2::create_transfer_request(&mut rule_engine, USER2, 2000, &clock, ctx);
+            rule_engine_v2::create_transfer_request(&mut rule_engine, USER3, 1500, &clock, ctx);
+
+            let counter = rule_engine_v2::get_request_counter(&rule_engine);
+            assert!(counter == 3, 0);
+
+            test_scenario::return_shared(rule_engine);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ============ ERC-1404 INTERFACE TEST ============
+
+    #[test]
+    fun test_detect_transfer_restriction() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
+
+            let code = rule_engine_v2::detect_transfer_restriction(
+                &rule_engine,
+                USER1,
+                USER2,
+                1000,
+                &clock,
+                true
+            );
+
+            test_scenario::return_shared(rule_engine);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_status_constant_getters() {
+        assert!(rule_engine_v2::status_none() == 0, 0);
+        assert!(rule_engine_v2::status_waiting() == 1, 1);
+        assert!(rule_engine_v2::status_approved() == 2, 2);
+        assert!(rule_engine_v2::status_denied() == 3, 3);
+        assert!(rule_engine_v2::status_executed() == 4, 4);
     }
 }

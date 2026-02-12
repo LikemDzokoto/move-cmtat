@@ -1,15 +1,20 @@
-/// RuleEngine V2 - Enhanced with Conditional Transfer Support
-/// Integrates ERC-1404 compliance, Swiss law (Vinkulierung) compliance,
-/// and comprehensive transfer restriction codes
+/// RuleEngine V2 - CMTA-Compliant Rule Orchestration Engine
+/// Implements hierarchical rule validation with VIP support and conditional transfers
 module move_cmtat::rule_engine_v2 {
 
     use iota::table::{Self, Table};
+    use iota::vec_map::{Self, VecMap};
     use iota::clock::Clock;
     use iota::event;
     use std::string::{Self, String};
     use std::option::Option;
-    use std::vector;
-    use move_cmtat::allowlist;
+
+    // ============ RULE TYPES ============
+    const RULE_NONE: u8 = 0;
+    const RULE_WHITELIST: u8 = 1;
+    const RULE_CONDITIONAL_TRANSFER: u8 = 2;
+    const RULE_BLACKLIST: u8 = 3;
+    const RULE_SANCTION_LIST: u8 = 4;
 
     // ============ STATUS CONSTANTS ============
     const STATUS_NONE: u8 = 0;
@@ -17,7 +22,6 @@ module move_cmtat::rule_engine_v2 {
     const STATUS_APPROVED: u8 = 2;
     const STATUS_DENIED: u8 = 3;
     const STATUS_EXECUTED: u8 = 4;
-    const STATUS_EXPIRED: u8 = 5;
 
     // ============ RESTRICTION CODES ============
     const CODE_VALID: u8 = 0;
@@ -26,16 +30,11 @@ module move_cmtat::rule_engine_v2 {
     const CODE_FROZEN_RECEIVER: u8 = 3;
     const CODE_NOT_ALLOWLISTED: u8 = 4;
     const CODE_INSUFFICIENT_BALANCE: u8 = 5;
-
-    // Conditional transfer codes
     const CODE_CONDITIONAL_REQUIRED: u8 = 10;
     const CODE_PENDING_APPROVAL: u8 = 11;
     const CODE_REQUEST_DENIED: u8 = 12;
     const CODE_REQUEST_EXPIRED: u8 = 13;
     const CODE_ALREADY_EXECUTED: u8 = 14;
-    const CODE_INVALID_REQUEST: u8 = 15;
-    const CODE_MINT_NOT_AUTHORIZED: u8 = 16;
-    const CODE_BURN_NOT_AUTHORIZED: u8 = 17;
 
     // ============ ERROR CODES ============
     const ERequestAlreadyExists: u64 = 600;
@@ -44,7 +43,8 @@ module move_cmtat::rule_engine_v2 {
     const ENotApproved: u64 = 603;
     const ERequestExpired: u64 = 604;
     const ENotOperator: u64 = 605;
-    const ETransferRestricted: u64 = 609;
+    const ERuleNotFound: u64 = 606;
+    const ETransferRestricted: u64 = 607;
 
     // ============ DEFAULT TIME LIMITS ============
     const DEFAULT_APPROVAL_DEADLINE_MS: u64 = 90 * 24 * 60 * 60 * 1000;
@@ -53,12 +53,9 @@ module move_cmtat::rule_engine_v2 {
     // ============ DATA STRUCTURES ============
 
     public struct TransferConfig has store, drop, copy {
-        auto_transfer_enabled: bool,
         auto_approval_enabled: bool,
         approval_deadline_ms: u64,
         execution_deadline_ms: u64,
-        authorized_mint_address: Option<address>,
-        authorized_burn_address: Option<address>,
     }
 
     public struct TransferRequest has store, drop, copy {
@@ -76,15 +73,35 @@ module move_cmtat::rule_engine_v2 {
 
     public struct RuleEngine has key, store {
         id: object::UID,
-        custom_rules: Table<vector<u8>, bool>,
+        rules: VecMap<u8, bool>,
+        vip_list: Table<address, bool>,
         transfer_requests: Table<vector<u8>, TransferRequest>,
         request_counter: u64,
         config: TransferConfig,
-        conditional_whitelist: Table<address, bool>,
         operator: address,
     }
 
     // ============ EVENTS ============
+
+    public struct RuleAdded has copy, drop {
+        operator: address,
+        rule_type: u8,
+    }
+
+    public struct RuleRemoved has copy, drop {
+        operator: address,
+        rule_type: u8,
+    }
+
+    public struct VipAdded has copy, drop {
+        operator: address,
+        account: address,
+    }
+
+    public struct VipRemoved has copy, drop {
+        operator: address,
+        account: address,
+    }
 
     public struct RequestCreated has copy, drop {
         request_id: u64,
@@ -123,37 +140,25 @@ module move_cmtat::rule_engine_v2 {
         executed_at: u64,
     }
 
-    public struct WhitelistAdded has copy, drop {
-        operator: address,
-        account: address,
-    }
-
-    public struct WhitelistRemoved has copy, drop {
-        operator: address,
-        account: address,
-    }
-
     // ============ INITIALIZATION ============
 
     public fun init_rule_engine_v2(
         ctx: &mut tx_context::TxContext
     ): RuleEngine {
-        RuleEngine {
+        let engine = RuleEngine {
             id: object::new(ctx),
-            custom_rules: table::new(ctx),
+            rules: vec_map::empty(),
+            vip_list: table::new(ctx),
             transfer_requests: table::new(ctx),
             request_counter: 0,
             config: TransferConfig {
-                auto_transfer_enabled: false,
-                auto_approval_enabled: true,
+                auto_approval_enabled: false,
                 approval_deadline_ms: DEFAULT_APPROVAL_DEADLINE_MS,
                 execution_deadline_ms: DEFAULT_EXECUTION_DEADLINE_MS,
-                authorized_mint_address: option::none(),
-                authorized_burn_address: option::none(),
             },
-            conditional_whitelist: table::new(ctx),
             operator: tx_context::sender(ctx),
-        }
+        };
+        engine
     }
 
     // ============ RESTRICTION CODE GETTERS ============
@@ -169,9 +174,6 @@ module move_cmtat::rule_engine_v2 {
     public fun restriction_code_request_denied(): u8 { CODE_REQUEST_DENIED }
     public fun restriction_code_request_expired(): u8 { CODE_REQUEST_EXPIRED }
     public fun restriction_code_already_executed(): u8 { CODE_ALREADY_EXECUTED }
-    public fun restriction_code_invalid_request(): u8 { CODE_INVALID_REQUEST }
-    public fun restriction_code_mint_not_authorized(): u8 { CODE_MINT_NOT_AUTHORIZED }
-    public fun restriction_code_burn_not_authorized(): u8 { CODE_BURN_NOT_AUTHORIZED }
 
     // ============ MESSAGE FOR RESTRICTION CODE ============
 
@@ -198,12 +200,6 @@ module move_cmtat::rule_engine_v2 {
             string::utf8(b"Transfer request has expired")
         } else if (code == CODE_ALREADY_EXECUTED) {
             string::utf8(b"Transfer request already executed")
-        } else if (code == CODE_INVALID_REQUEST) {
-            string::utf8(b"Invalid transfer request")
-        } else if (code == CODE_MINT_NOT_AUTHORIZED) {
-            string::utf8(b"Mint requires conditional approval")
-        } else if (code == CODE_BURN_NOT_AUTHORIZED) {
-            string::utf8(b"Burn requires conditional approval")
         } else {
             string::utf8(b"Unknown restriction")
         }
@@ -231,13 +227,76 @@ module move_cmtat::rule_engine_v2 {
         bytes
     }
 
-    // ============ WHITELIST MANAGEMENT ============
+    // ============ RULE MANAGEMENT ============
 
-    public fun is_conditional_whitelisted(
-        rule_engine: &RuleEngine,
-        account: address
-    ): bool {
-        table::contains(&rule_engine.conditional_whitelist, account)
+    public fun is_rule_enabled(rule_engine: &RuleEngine, rule_type: u8): bool {
+        vec_map::contains(&rule_engine.rules, &rule_type)
+    }
+
+    public entry fun add_rule(
+        rule_engine: &mut RuleEngine,
+        rule_type: u8,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (!vec_map::contains(&rule_engine.rules, &rule_type)) {
+            vec_map::insert(&mut rule_engine.rules, rule_type, true);
+        };
+
+        event::emit(RuleAdded { operator, rule_type });
+    }
+
+    public entry fun remove_rule(
+        rule_engine: &mut RuleEngine,
+        rule_type: u8,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (vec_map::contains(&rule_engine.rules, &rule_type)) {
+            vec_map::remove(&mut rule_engine.rules, &rule_type);
+        };
+
+        event::emit(RuleRemoved { operator, rule_type });
+    }
+
+    // ============ VIP MANAGEMENT ============
+
+    public fun is_vip(rule_engine: &RuleEngine, account: address): bool {
+        table::contains(&rule_engine.vip_list, account)
+    }
+
+    public entry fun add_vip(
+        rule_engine: &mut RuleEngine,
+        account: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (!table::contains(&rule_engine.vip_list, account)) {
+            table::add(&mut rule_engine.vip_list, account, true);
+        };
+
+        event::emit(VipAdded { operator, account });
+    }
+
+    public entry fun remove_vip(
+        rule_engine: &mut RuleEngine,
+        account: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (table::contains(&rule_engine.vip_list, account)) {
+            table::remove(&mut rule_engine.vip_list, account);
+        };
+
+        event::emit(VipRemoved { operator, account });
     }
 
     // ============ TRANSFER REQUEST LIFECYCLE ============
@@ -376,28 +435,50 @@ module move_cmtat::rule_engine_v2 {
 
     public fun validate_transfer(
         rule_engine: &RuleEngine,
-        allowlist_state: &allowlist::AllowlistState,
         from: address,
         to: address,
         value: u64,
-        clock: &Clock
+        clock: &Clock,
+        is_allowlisted: bool
     ): u8 {
-        if (is_conditional_whitelisted(rule_engine, from) && 
-            is_conditional_whitelisted(rule_engine, to)) {
-            return CODE_VALID
-        };
+        let now = clock.timestamp_ms();
 
-        let key = generate_request_key(from, to, value);
-
-        if (!table::contains(&rule_engine.transfer_requests, key)) {
-            if (!allowlist::is_allowlisted(allowlist_state, to)) {
+        // Step 1: Check VIP status (bypasses conditional transfer ONLY)
+        if (is_vip(rule_engine, from) && is_vip(rule_engine, to)) {
+            if (!is_allowlisted) {
                 return CODE_NOT_ALLOWLISTED
             };
             return CODE_VALID
         };
 
+        // Step 2: Check if conditional transfer rule is enabled
+        if (is_rule_enabled(rule_engine, RULE_CONDITIONAL_TRANSFER)) {
+            let code = validate_conditional_request(rule_engine, from, to, value, now);
+            if (code != CODE_VALID) return code;
+        };
+
+        // Step 3: Allowlist check (always required)
+        if (!is_allowlisted) {
+            return CODE_NOT_ALLOWLISTED
+        };
+
+        CODE_VALID
+    }
+
+    fun validate_conditional_request(
+        rule_engine: &RuleEngine,
+        from: address,
+        to: address,
+        value: u64,
+        now: u64
+    ): u8 {
+        let key = generate_request_key(from, to, value);
+
+        if (!table::contains(&rule_engine.transfer_requests, key)) {
+            return CODE_CONDITIONAL_REQUIRED
+        };
+
         let request = table::borrow(&rule_engine.transfer_requests, key);
-        let now = clock.timestamp_ms();
 
         if (rule_engine.config.auto_approval_enabled && 
             request.status == STATUS_WAITING && 
@@ -416,94 +497,33 @@ module move_cmtat::rule_engine_v2 {
             },
             STATUS_DENIED => CODE_REQUEST_DENIED,
             STATUS_EXECUTED => CODE_ALREADY_EXECUTED,
-            STATUS_EXPIRED => CODE_REQUEST_EXPIRED,
-            _ => CODE_INVALID_REQUEST,
+            _ => CODE_CONDITIONAL_REQUIRED,
         }
     }
 
-    public fun validate_mint(
-        rule_engine: &RuleEngine,
-        to: address,
-        _value: u64,
-        _clock: &Clock
-    ): u8 {
-        if (option::is_some(&rule_engine.config.authorized_mint_address)) {
-            let authorized = option::borrow(&rule_engine.config.authorized_mint_address);
-            if (*authorized == to) {
-                return CODE_VALID
-            };
-        };
-        CODE_MINT_NOT_AUTHORIZED
-    }
-
-    public fun validate_burn(
-        rule_engine: &RuleEngine,
-        from: address,
-        _value: u64,
-        _clock: &Clock
-    ): u8 {
-        if (option::is_some(&rule_engine.config.authorized_burn_address)) {
-            let authorized = option::borrow(&rule_engine.config.authorized_burn_address);
-            if (*authorized == from) {
-                return CODE_VALID
-            };
-        };
-        CODE_BURN_NOT_AUTHORIZED
-    }
+    // ============ ERC-1404 INTERFACE ============
 
     public fun detect_transfer_restriction(
         rule_engine: &RuleEngine,
-        allowlist_state: &allowlist::AllowlistState,
         from: address,
         to: address,
         value: u64,
-        clock: &Clock
+        clock: &Clock,
+        is_allowlisted: bool
     ): u8 {
-        validate_transfer(rule_engine, allowlist_state, from, to, value, clock)
+        validate_transfer(rule_engine, from, to, value, clock, is_allowlisted)
     }
 
     public fun require_valid_transfer(
         rule_engine: &RuleEngine,
-        allowlist_state: &allowlist::AllowlistState,
         from: address,
         to: address,
         value: u64,
-        clock: &Clock
+        clock: &Clock,
+        is_allowlisted: bool
     ) {
-        let code = validate_transfer(rule_engine, allowlist_state, from, to, value, clock);
+        let code = validate_transfer(rule_engine, from, to, value, clock, is_allowlisted);
         assert!(code == CODE_VALID, ETransferRestricted)
-    }
-
-    // ============ WHITELIST MANAGEMENT ============
-
-    public entry fun add_conditional_whitelist(
-        rule_engine: &mut RuleEngine,
-        account: address,
-        ctx: &tx_context::TxContext
-    ) {
-        let operator = tx_context::sender(ctx);
-        assert!(operator == rule_engine.operator, ENotOperator);
-
-        if (!table::contains(&rule_engine.conditional_whitelist, account)) {
-            table::add(&mut rule_engine.conditional_whitelist, account, true);
-        };
-
-        event::emit(WhitelistAdded { operator, account });
-    }
-
-    public entry fun remove_conditional_whitelist(
-        rule_engine: &mut RuleEngine,
-        account: address,
-        ctx: &tx_context::TxContext
-    ) {
-        let operator = tx_context::sender(ctx);
-        assert!(operator == rule_engine.operator, ENotOperator);
-
-        if (table::contains(&rule_engine.conditional_whitelist, account)) {
-            table::remove(&mut rule_engine.conditional_whitelist, account);
-        };
-
-        event::emit(WhitelistRemoved { operator, account });
     }
 
     // ============ QUERY FUNCTIONS ============
@@ -523,13 +543,13 @@ module move_cmtat::rule_engine_v2 {
 
     public fun can_execute(
         rule_engine: &RuleEngine,
-        allowlist_state: &allowlist::AllowlistState,
         from: address,
         to: address,
         value: u64,
-        clock: &Clock
+        clock: &Clock,
+        is_allowlisted: bool
     ): bool {
-        let code = validate_transfer(rule_engine, allowlist_state, from, to, value, clock);
+        let code = validate_transfer(rule_engine, from, to, value, clock, is_allowlisted);
         code == CODE_VALID
     }
 
@@ -550,16 +570,6 @@ module move_cmtat::rule_engine_v2 {
     }
 
     // ============ CONFIGURATION FUNCTIONS ============
-
-    public entry fun set_auto_transfer(
-        rule_engine: &mut RuleEngine,
-        enabled: bool,
-        ctx: &tx_context::TxContext
-    ) {
-        let operator = tx_context::sender(ctx);
-        assert!(operator == rule_engine.operator, ENotOperator);
-        rule_engine.config.auto_transfer_enabled = enabled;
-    }
 
     public entry fun set_auto_approval(
         rule_engine: &mut RuleEngine,
@@ -583,26 +593,6 @@ module move_cmtat::rule_engine_v2 {
         rule_engine.config.execution_deadline_ms = execution_deadline_ms;
     }
 
-    public entry fun set_authorized_mint_address(
-        rule_engine: &mut RuleEngine,
-        address: Option<address>,
-        ctx: &tx_context::TxContext
-    ) {
-        let operator = tx_context::sender(ctx);
-        assert!(operator == rule_engine.operator, ENotOperator);
-        rule_engine.config.authorized_mint_address = address;
-    }
-
-    public entry fun set_authorized_burn_address(
-        rule_engine: &mut RuleEngine,
-        address: Option<address>,
-        ctx: &tx_context::TxContext
-    ) {
-        let operator = tx_context::sender(ctx);
-        assert!(operator == rule_engine.operator, ENotOperator);
-        rule_engine.config.authorized_burn_address = address;
-    }
-
     public entry fun transfer_operator_role(
         rule_engine: &mut RuleEngine,
         new_operator: address,
@@ -620,5 +610,11 @@ module move_cmtat::rule_engine_v2 {
     public fun status_approved(): u8 { STATUS_APPROVED }
     public fun status_denied(): u8 { STATUS_DENIED }
     public fun status_executed(): u8 { STATUS_EXECUTED }
-    public fun status_expired(): u8 { STATUS_EXPIRED }
+
+    // ============ RULE TYPE GETTERS ============
+
+    public fun rule_whitelist(): u8 { RULE_WHITELIST }
+    public fun rule_conditional_transfer(): u8 { RULE_CONDITIONAL_TRANSFER }
+    public fun rule_blacklist(): u8 { RULE_BLACKLIST }
+    public fun rule_sanction_list(): u8 { RULE_SANCTION_LIST }
 }

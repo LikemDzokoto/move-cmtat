@@ -193,7 +193,7 @@ module move_cmtat::debt_cmtat {
         debt::get_debt(&compliance_state.debt_state)
     }
 
-    public fun credit_events(compliance_state: &ComplianceState): String {
+    public fun credit_events(compliance_state: &ComplianceState): debt::CreditEvents {
         debt::get_credit_events(&compliance_state.debt_state)
     }
 
@@ -250,9 +250,22 @@ module move_cmtat::debt_cmtat {
     public entry fun set_credit_events(
         _debt_cap: &DebtCap,
         compliance_state: &mut ComplianceState,
-        events: String
+        flag_default: bool,
+        flag_redeemed: bool,
+        flag_matured: bool,
+        rating: String,
+        principal_distributed: u64,
+        next_coupon_date: u64,
     ) {
-        debt::set_credit_events(&mut compliance_state.debt_state, events);
+        let credit_events = debt::create_credit_events(
+            flag_default,
+            flag_redeemed,
+            flag_matured,
+            rating,
+            principal_distributed,
+            next_coupon_date,
+        );
+        debt::set_credit_events(&mut compliance_state.debt_state, credit_events);
     }
 
     public entry fun set_debt_engine(
