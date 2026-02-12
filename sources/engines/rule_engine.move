@@ -9,7 +9,6 @@ module move_cmtat::rule_engine {
     /// Errors
     const ETransferRestricted: u64 = 600;
 
-    /// Rule engine state (kept for backwards compatibility)
     public struct RuleEngine has key, store {
         id: object::UID,
         custom_rules: Table<vector<u8>, bool>,

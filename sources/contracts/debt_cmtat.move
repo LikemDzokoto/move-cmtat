@@ -12,7 +12,7 @@ module move_cmtat::debt_cmtat {
     use move_cmtat::debt;
     use move_cmtat::snapshot_engine;
 
-    // ========== ONE-TIME WITNESS ==========
+
     public struct DEBT_CMTAT has drop {}
 
     // ========== CMTAT REGISTRY ==========
@@ -31,7 +31,7 @@ module move_cmtat::debt_cmtat {
         snapshot_engine: snapshot_engine::SnapshotEngine,
     }
 
-    // ========== COMPLIANCE STATE (debt only) ==========
+
     public struct ComplianceState has key {
         id: object::UID,
         debt_state: debt::DebtState,
@@ -91,9 +91,9 @@ module move_cmtat::debt_cmtat {
     const EModulePaused: u64 = 2;
     const EDebtInDefault: u64 = 4;
 
-    // ========== INIT FUNCTION ==========
+
     fun init(witness: DEBT_CMTAT, ctx: &mut tx_context::TxContext) {
-        // Create native regulated currency with DenyList
+        
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
             witness,
             9,
@@ -105,7 +105,7 @@ module move_cmtat::debt_cmtat {
             ctx
         );
 
-        // Create CMTAT registry
+      
         let registry = CMTATRegistry {
             id: object::new(ctx),
             terms: string::utf8(b""),
@@ -115,13 +115,13 @@ module move_cmtat::debt_cmtat {
             deactivated: false,
         };
 
-        // Create state with snapshot engine
+        // state with snapshot engine
         let state = DebtCMTATState {
             id: object::new(ctx),
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
         };
 
-        // Create compliance state with debt state only
+        //  compliance state with debt state only
         let compliance_state = ComplianceState {
             id: object::new(ctx),
             debt_state: debt::init_debt_state(ctx),

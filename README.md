@@ -330,7 +330,7 @@ public entry fun transfer(
     // Native transfer
     transfer::public_transfer(coins, to);
 }
-```
+``` 
 
 **Why IOTA Native?**
 - Balances are owned by users, not the contract
