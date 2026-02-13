@@ -151,7 +151,7 @@ module move_cmtat::light_cmtat {
         coin::get_name(metadata)
     }
 
-    // ✅ FIX: Use from_ascii to convert
+    
     public fun symbol(metadata: &CoinMetadata<LIGHT_CMTAT>): String {
         let ascii_symbol = coin::get_symbol(metadata);
         string::from_ascii(ascii_symbol)

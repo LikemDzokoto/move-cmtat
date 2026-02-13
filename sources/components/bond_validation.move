@@ -1,6 +1,7 @@
 /// Bond Validation Component - Interest Calculations & Bond-Specific Logic
 /// Comprehensive validation and calculation functions for debt securities
 /// Implements day count conventions, business day rules, and interest math
+#[allow(unused_const)]
 module move_cmtat::bond_validation {
     use std::string::String;
     use move_cmtat::debt::{Self, DebtState, DayCountConvention, BusinessDayConvention};

@@ -1,15 +1,14 @@
 /// Debt Engine - Multi-Token External Debt Management
 /// Centralized contract for managing debt data across multiple tokens
 /// Reduces per-token contract size by externalizing debt storage
+#[allow(unused_const, duplicate_alias, lint(custom_state_change))]
 module move_cmtat::debt_engine {
     use std::string::{Self, String};
     use iota::table::{Self, Table};
     use iota::event;
     use iota::clock;
     use iota::tx_context::{Self, TxContext};
-    use std::vector;
-    use std::option::{Self, Option};
-    use move_cmtat::debt::{Self, DebtState, DebtIdentifier, DebtInstrument, CreditEvents, BondTerms};
+    use move_cmtat::debt::{Self, DebtIdentifier, DebtInstrument, CreditEvents, BondTerms};
 
     // ========== ERRORS ==========
     
@@ -321,7 +320,7 @@ module move_cmtat::debt_engine {
         state: &mut DebtEngineState,
         token_address: address,
         clock: &clock::Clock,
-        ctx: &TxContext
+        _ctx: &TxContext
     ) {
         assert!(is_token_registered(state, token_address), ETokenNotRegistered);
 
@@ -412,7 +411,7 @@ module move_cmtat::debt_engine {
         token_address: address,
         amount: u64,
         clock: &clock::Clock,
-        ctx: &TxContext
+        _ctx: &TxContext
     ) {
         assert!(is_token_registered(state, token_address), ETokenNotRegistered);
 

@@ -7,10 +7,8 @@ module move_cmtat::rule_engine_v2 {
     use iota::clock::Clock;
     use iota::event;
     use std::string::{Self, String};
-    use std::option::Option;
 
     // ============ RULE TYPES ============
-    const RULE_NONE: u8 = 0;
     const RULE_WHITELIST: u8 = 1;
     const RULE_CONDITIONAL_TRANSFER: u8 = 2;
     const RULE_BLACKLIST: u8 = 3;
@@ -43,7 +41,6 @@ module move_cmtat::rule_engine_v2 {
     const ENotApproved: u64 = 603;
     const ERequestExpired: u64 = 604;
     const ENotOperator: u64 = 605;
-    const ERuleNotFound: u64 = 606;
     const ETransferRestricted: u64 = 607;
 
     // ============ DEFAULT TIME LIMITS ============

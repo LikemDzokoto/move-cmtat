@@ -1,6 +1,7 @@
 /// Snapshot Engine - Historical Balance Tracking
 /// Complete implementation with working balance recording and retrieval
 /// Used for dividend distributions, interest payments, and voting rights
+#[allow(unused_const, unused_field, duplicate_alias)]
 module move_cmtat::snapshot_engine {
     use iota::table::{Self, Table};
     use iota::vec_map::{Self, VecMap};
@@ -23,8 +24,8 @@ module move_cmtat::snapshot_engine {
 
     /// Account balance at specific snapshot
     public struct AccountSnapshot has store, drop, copy {
-        account: address,
-        balance: u64,
+        _account: address,
+        _balance: u64,
     }
 
     /// Snapshot engine state
@@ -211,7 +212,7 @@ module move_cmtat::snapshot_engine {
     ): vector<address> {
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
 
-        let balance_table = table::borrow(&engine.balances, snapshot_id);
+        let _balance_table = table::borrow(&engine.balances, snapshot_id);
         let accounts = vector::empty<address>();
         
         // Note: IOTA tables don't support iteration, so this is limited

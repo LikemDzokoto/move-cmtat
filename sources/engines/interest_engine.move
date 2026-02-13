@@ -1,12 +1,11 @@
 /// Interest Engine - Coupon Schedule & Payment Tracking
 /// Manages coupon schedules, interest calculations, and payment history
 /// Supports various payment frequencies and calculation methods
+#[allow(unused_field, unused_const)]
 module move_cmtat::interest_engine {
     use std::string::{Self, String};
     use iota::table::{Self, Table};
     use iota::event;
-    use std::vector;
-    use std::option::{Self, Option};
 
     // ========== CONSTANTS ==========
     
@@ -97,17 +96,17 @@ module move_cmtat::interest_engine {
     }
 
     public struct CouponPaymentFailed has copy, drop {
-        coupon_number: u64,
-        scheduled_date: u64,
-        reason: String,
-        attempted_by: address,
+        _coupon_number: u64,
+        _scheduled_date: u64,
+        _reason: String,
+        _attempted_by: address,
     }
 
     public struct InterestAccrued has copy, drop {
-        amount: u64,
-        from_time: u64,
-        to_time: u64,
-        calculated_by: address,
+        _amount: u64,
+        _from_time: u64,
+        _to_time: u64,
+        _calculated_by: address,
     }
 
     // ========== INITIALIZATION ==========

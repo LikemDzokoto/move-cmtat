@@ -1,9 +1,10 @@
 /// Debt Component - Full Bond Instrument Management
 /// Comprehensive debt securities management for corporate bonds
 /// Implements CMTAT DebtModule specification with structured data types
+#[allow(unused_const, duplicate_alias)]
 module move_cmtat::debt {
     use std::string::{Self, String};
-    use iota::object::UID;
+    use iota::object;
 
     // ========== CONSTANTS ==========
     
@@ -179,7 +180,7 @@ module move_cmtat::debt {
     /// DebtState - Main state structure for debt tracking
     /// Enhanced version with structured data types
     public struct DebtState has key, store {
-        id: UID,
+        id: object::UID,
         
         // Structured debt information
         identifier: DebtIdentifier,

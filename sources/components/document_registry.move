@@ -1,11 +1,11 @@
 /// Document Registry Component - ERC-1643 Compliant Document Management
 /// Manages on-chain documents for debt securities (Prospectus, Indenture, Terms)
 /// Implements document tracking with hash, URI, and modification history
+#[allow(unused_field)]
 module move_cmtat::document_registry {
     use std::string::{Self, String};
     use iota::vec_map::{Self, VecMap};
     use iota::event;
-    use std::vector;
 
     // ========== ERRORS ==========
     
@@ -61,9 +61,9 @@ module move_cmtat::document_registry {
     }
 
     public struct DocumentAccessed has copy, drop {
-        name: String,
-        accessed_by: address,
-        timestamp: u64,
+        _name: String,
+        _accessed_by: address,
+        _timestamp: u64,
     }
 
     // ========== INITIALIZATION ==========
