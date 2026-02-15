@@ -217,7 +217,7 @@ module move_cmtat::rule_engine_v2 {
         let mut temp = value;
         let mut i = 0;
         while (i < 8) {
-            vector::push_back(&mut bytes, (temp as u8));
+            vector::push_back(&mut bytes, ((temp & 0xFF) as u8));
             temp = temp >> 8;
             i = i + 1;
         };
