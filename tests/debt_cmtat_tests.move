@@ -98,7 +98,7 @@ module move_cmtat::debt_cmtat_tests_new {
                 0,      // next_coupon_date
             );
 
-            let events = debt_cmtat::credit_events(&compliance_state);
+            let _events = debt_cmtat::credit_events(&compliance_state);
 
             test_scenario::return_shared(compliance_state);
             test_scenario::return_to_sender(scenario, debt_cap);

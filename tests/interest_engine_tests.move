@@ -19,7 +19,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
 
             assert!(interest_engine::get_total_coupons(&engine) == 0, 0);
             assert!(interest_engine::get_total_interest_paid(&engine) == 0, 1);
@@ -39,13 +39,13 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let mut engine = test_scenario::take_shared<InterestEngineState>(scenario);
+            let engine = test_scenario::take_shared<InterestEngineState>(scenario);
 
             assert!(interest_engine::get_total_coupons(&engine) == 0, 0);
             assert!(interest_engine::get_coupons_remaining(&engine) == 0, 1);
@@ -67,7 +67,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -105,7 +105,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -143,7 +143,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -183,7 +183,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -221,7 +221,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -259,7 +259,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -299,7 +299,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -339,7 +339,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -377,7 +377,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -419,7 +419,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -459,7 +459,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -502,7 +502,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -540,7 +540,7 @@ module move_cmtat::interest_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = interest_engine::init_interest_engine(ctx);
+            let engine = interest_engine::init_interest_engine(ctx);
             transfer::public_share_object(engine);
         };
 

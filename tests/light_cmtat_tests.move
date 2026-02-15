@@ -433,7 +433,7 @@ module move_cmtat::light_cmtat_tests_new {
         {
             let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
             let deny_list = take_deny_list(scenario);
-            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
             assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);

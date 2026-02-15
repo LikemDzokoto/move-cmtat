@@ -23,7 +23,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
 
             assert!(snapshot_engine::get_snapshot_count(&engine) == 0, 0);
 
@@ -41,13 +41,13 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let engine = test_scenario::take_shared<SnapshotEngine>(scenario);
 
             assert!(snapshot_engine::get_snapshot_count(&engine) == 0, 0);
             assert!(snapshot_engine::get_all_snapshot_ids(&engine) == vector[], 1);
@@ -68,7 +68,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -102,7 +102,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -137,7 +137,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -174,7 +174,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -204,7 +204,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -235,7 +235,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -272,7 +272,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -306,7 +306,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -338,7 +338,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -367,7 +367,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -395,7 +395,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -426,7 +426,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 
@@ -460,7 +460,7 @@ module move_cmtat::snapshot_engine_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let ctx = test_scenario::ctx(scenario);
-            let mut engine = snapshot_engine::init_snapshot_engine(ctx);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
             transfer::public_share_object(engine);
         };
 

@@ -5,11 +5,10 @@ module move_cmtat::rule_engine_v2_tests {
     use iota::test_scenario::{Self, Scenario};
     use iota::clock::{Self, Clock};
 
-    use move_cmtat::rule_engine_v2::{Self, RuleEngine, TransferRequest};
+    use move_cmtat::rule_engine_v2::{Self, RuleEngine};
 
     // ============ TEST ADDRESSES ============
     const ADMIN: address = @0xAD;
-    const OPERATOR: address = @0xDEAD;
     const USER1: address = @0x1;
     const USER2: address = @0x2;
     const USER3: address = @0x3;
@@ -926,7 +925,7 @@ module move_cmtat::rule_engine_v2_tests {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
-            let code = rule_engine_v2::detect_transfer_restriction(
+            let _code = rule_engine_v2::detect_transfer_restriction(
                 &rule_engine,
                 USER1,
                 USER2,

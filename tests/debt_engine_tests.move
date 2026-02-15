@@ -385,7 +385,7 @@ module move_cmtat::debt_engine_tests {
 
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let mut state = test_scenario::take_shared<DebtEngineState>(scenario);
+            let state = test_scenario::take_shared<DebtEngineState>(scenario);
 
             let tokens = debt_engine::get_registered_tokens(&state);
             assert!(vector::length(&tokens) == 0, 0);
