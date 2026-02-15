@@ -48,6 +48,18 @@ module move_cmtat::interest_engine {
         payment_tx: Option<address>,      // Transaction reference
     }
 
+    // ========== GETTERS ==========
+
+    public fun coupon_get_number(coupon: &CouponPayment): u64 { coupon.coupon_number }
+    public fun coupon_get_payment_date(coupon: &CouponPayment): u64 { coupon.payment_date }
+    public fun coupon_get_record_date(coupon: &CouponPayment): u64 { coupon.record_date }
+    public fun coupon_get_amount_per_bond(coupon: &CouponPayment): u64 { coupon.amount_per_bond }
+    public fun coupon_get_total_amount(coupon: &CouponPayment): u64 { coupon.total_amount }
+    public fun coupon_get_principal_at_record(coupon: &CouponPayment): u64 { coupon.principal_at_record }
+    public fun coupon_is_paid(coupon: &CouponPayment): bool { coupon.paid }
+    public fun coupon_get_actual_payment_date(coupon: &CouponPayment): Option<u64> { coupon.actual_payment_date }
+    public fun coupon_get_payment_tx(coupon: &CouponPayment): Option<address> { coupon.payment_tx }
+
     /// Coupon schedule
     public struct CouponSchedule has copy, drop, store {
         payments: vector<CouponPayment>,

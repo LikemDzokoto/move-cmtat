@@ -21,7 +21,9 @@ module move_cmtat::rule_engine_v2_tests {
         {
             let ctx = test_scenario::ctx(scenario);
             let rule_engine = rule_engine_v2::init_rule_engine_v2(ctx);
+            let clock = clock::create_for_testing(ctx);
             transfer::public_share_object(rule_engine);
+            clock::share_for_testing(clock);
         };
     }
 

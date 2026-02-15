@@ -31,7 +31,7 @@ module move_cmtat::debt_engine {
     }
 
     /// Debt engine state
-    public struct DebtEngineState has key {
+    public struct DebtEngineState has key, store {
         id: UID,
         token_debt_data: Table<address, TokenDebtData>,  // token_address -> TokenDebtData
         supported_tokens: vector<address>,
@@ -93,6 +93,25 @@ module move_cmtat::debt_engine {
 
         transfer::share_object(state);
         transfer::transfer(admin_cap, sender);
+    }
+
+    /// Initialize debt engine for testing - public version
+    public fun init_debt_engine(ctx: &mut TxContext): (DebtEngineState, DebtEngineAdminCap) {
+        let sender = tx_context::sender(ctx);
+        
+        let state = DebtEngineState {
+            id: object::new(ctx),
+            token_debt_data: table::new(ctx),
+            supported_tokens: vector::empty(),
+            admin_address: sender,
+        };
+
+        let admin_cap = DebtEngineAdminCap {
+            id: object::new(ctx),
+            engine_id: object::id_address(&state),
+        };
+
+        (state, admin_cap)
     }
 
     // ========== TOKEN REGISTRATION ==========

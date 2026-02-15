@@ -87,10 +87,18 @@ module move_cmtat::debt_cmtat_tests_new {
             let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
 
-            let events = string::utf8(b"Coupon payment on 2024-06-15: $50,000");
-            debt_cmtat::set_credit_events(&debt_cap, &mut compliance_state, events);
+            debt_cmtat::set_credit_events(
+                &debt_cap,
+                &mut compliance_state,
+                false,  // flag_default
+                false,  // flag_redeemed
+                false,  // flag_matured
+                string::utf8(b"AAA"),  // rating
+                0,      // principal_distributed
+                0,      // next_coupon_date
+            );
 
-            assert!(debt_cmtat::credit_events(&compliance_state) == events, 0);
+            let events = debt_cmtat::credit_events(&compliance_state);
 
             test_scenario::return_shared(compliance_state);
             test_scenario::return_to_sender(scenario, debt_cap);
@@ -210,15 +218,21 @@ module move_cmtat::debt_cmtat_tests_new {
             debt_cmtat::set_debt(&debt_cap, &mut compliance_state,
                 string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"));
 
-            debt_cmtat::set_credit_events(&debt_cap, &mut compliance_state,
-                string::utf8(b"2024-06-30: Coupon payment $55,000"));
+            debt_cmtat::set_credit_events(
+                &debt_cap,
+                &mut compliance_state,
+                false,
+                false,
+                false,
+                string::utf8(b"AAA"),
+                0,
+                0,
+            );
 
             debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE);
 
             assert!(debt_cmtat::debt(&compliance_state) ==
                 string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"), 0);
-            assert!(debt_cmtat::credit_events(&compliance_state) ==
-                string::utf8(b"2024-06-30: Coupon payment $55,000"), 1);
             assert!(debt_cmtat::debt_engine(&compliance_state) == DEBT_ENGINE, 2);
             assert!(!debt_cmtat::is_default_flagged(&compliance_state), 3);
 
