@@ -217,27 +217,37 @@ module move_cmtat::light_cmtat_tests_new {
 
         setup(scenario);
 
+        // Transaction 1: Pause the contract
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
-            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
             let mut deny_list = take_deny_list(scenario);
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
-            // Pause
             let ctx = test_scenario::ctx(scenario);
             light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
 
-            // Try to mint - should fail
+            test_scenario::return_to_sender(scenario, pauser_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 2: Try to mint - should fail
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = take_deny_list(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
-             public_transfer(coins, USER1);
+            public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
             test_scenario::return_to_sender(scenario, minter_cap);
-            test_scenario::return_to_sender(scenario, pauser_cap);
-            test_scenario::return_to_sender(scenario, deny_cap);
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
         };
@@ -253,27 +263,35 @@ module move_cmtat::light_cmtat_tests_new {
 
         setup(scenario);
 
+        // Transaction 1: Freeze USER1
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 2: Try to mint to frozen address - should fail
         test_scenario::next_tx(scenario, ADMIN);
         {
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
-            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
-            let mut deny_list = take_deny_list(scenario);
-            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let deny_list = take_deny_list(scenario);
 
-            // Freeze USER1
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
-
-            // Try to mint to frozen address - should fail
             let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
-             public_transfer(coins, USER1);
+            public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
             test_scenario::return_to_sender(scenario, minter_cap);
-            test_scenario::return_to_sender(scenario, enforcer_cap);
-            test_scenario::return_to_sender(scenario, deny_cap);
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
         };
@@ -395,6 +413,7 @@ module move_cmtat::light_cmtat_tests_new {
 
         setup(scenario);
 
+        // Transaction 1: Freeze USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
             let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
@@ -402,17 +421,49 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-
-            // Freeze USER1
             light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
-            assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);
-
-            // Unfreeze USER1
-            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, false, ctx);
-            assert!(!light_cmtat::is_frozen(&deny_list, USER1, ctx), 1);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 2: Verify frozen and unfreeze USER1
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);
+
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 3: Unfreeze USER1
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, false, ctx);
+
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 4: Verify unfrozen
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            assert!(!light_cmtat::is_frozen(&deny_list, USER1, ctx), 1);
             test_scenario::return_shared(deny_list);
         };
 
@@ -426,6 +477,7 @@ module move_cmtat::light_cmtat_tests_new {
 
         setup(scenario);
 
+        // Transaction 1: Batch freeze USER1 and USER2
         test_scenario::next_tx(scenario, ADMIN);
         {
             let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
@@ -438,11 +490,18 @@ module move_cmtat::light_cmtat_tests_new {
             let ctx = test_scenario::ctx(scenario);
             light_cmtat::batch_set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, accounts, statuses, ctx);
 
-            assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);
-            assert!(light_cmtat::is_frozen(&deny_list, USER2, ctx), 1);
-
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 2: Verify both are frozen
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            assert!(light_cmtat::is_frozen(&deny_list, USER1, ctx), 0);
+            assert!(light_cmtat::is_frozen(&deny_list, USER2, ctx), 1);
             test_scenario::return_shared(deny_list);
         };
 
@@ -458,6 +517,16 @@ module move_cmtat::light_cmtat_tests_new {
 
         setup(scenario);
 
+        // Transaction 1: Verify not paused
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            assert!(!light_cmtat::is_paused(&deny_list, ctx), 0);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 2: Pause the contract
         test_scenario::next_tx(scenario, ADMIN);
         {
             let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
@@ -466,20 +535,46 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-
-            assert!(!light_cmtat::is_paused(&deny_list, ctx), 0);
-
-            // Pause
             light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
-            assert!(light_cmtat::is_paused(&deny_list, ctx), 1);
-
-            // Unpause
-            light_cmtat::unpause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
-            assert!(!light_cmtat::is_paused(&deny_list, ctx), 2);
 
             test_scenario::return_to_sender(scenario, pauser_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
             test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 3: Verify paused
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            assert!(light_cmtat::is_paused(&deny_list, ctx), 1);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 4: Unpause the contract
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let pauser_cap = test_scenario::take_from_sender<PauserCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::unpause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+
+            test_scenario::return_to_sender(scenario, pauser_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        // Transaction 5: Verify not paused
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            assert!(!light_cmtat::is_paused(&deny_list, ctx), 2);
             test_scenario::return_shared(deny_list);
         };
 
