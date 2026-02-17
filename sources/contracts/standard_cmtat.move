@@ -1,5 +1,5 @@
 /// Standard CMTAT - Full Feature Set with Native Coin<T> Architecture
-/// Implements ERC-1404 compliance with transfer restriction codes
+/// Implements CMTAT compliant transfer restriction validation
 /// Uses capability-based access control and native IOTA Coin<T> with DenyList
 module move_cmtat::standard_cmtat {
     use std::string::{Self, String};
@@ -173,7 +173,7 @@ module move_cmtat::standard_cmtat {
         coin::deny_list_v1_contains_current_epoch<STANDARD_CMTAT>(deny_list, account, ctx)
     }
 
-    // ========== ERC-1404 TRANSFER VALIDATION ==========
+    // ========== CMTAT TRANSFER RESTRICTION VALIDATION ==========
     public fun message_for_transfer_restriction(code: u8): String {
         rule_engine_v2::message_for_restriction_code(code)
     }

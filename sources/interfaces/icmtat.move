@@ -2,7 +2,7 @@
 /// Defines the core interfaces for CMTAT token implementations
 module move_cmtat::icmtat {
 
-    /// Restriction codes for transfer validation (ERC-1404 compatible)
+    /// Restriction codes for transfer validation (CMTAT compliant)
     const RESTRICTION_CODE_VALID: u8 = 0;
     const RESTRICTION_CODE_PAUSED: u8 = 1;
     const RESTRICTION_CODE_FROZEN_SENDER: u8 = 2;
@@ -16,7 +16,7 @@ module move_cmtat::icmtat {
     const BURNER_ROLE: vector<u8> = b"BURNER_ROLE";
     const PAUSER_ROLE: vector<u8> = b"PAUSER_ROLE";
     const ENFORCER_ROLE: vector<u8> = b"ENFORCER_ROLE";
-    const ERC20ENFORCER_ROLE: vector<u8> = b"ERC20ENFORCER_ROLE";
+    const ENFORCEMENT_ROLE: vector<u8> = b"ENFORCEMENT_ROLE";
     const SNAPSHOOTER_ROLE: vector<u8> = b"SNAPSHOOTER_ROLE";
     const DOCUMENT_ROLE: vector<u8> = b"DOCUMENT_ROLE";
     const EXTRA_INFORMATION_ROLE: vector<u8> = b"EXTRA_INFORMATION_ROLE";
@@ -36,7 +36,7 @@ module move_cmtat::icmtat {
     public fun burner_role(): vector<u8> { BURNER_ROLE }
     public fun pauser_role(): vector<u8> { PAUSER_ROLE }
     public fun enforcer_role(): vector<u8> { ENFORCER_ROLE }
-    public fun erc20enforcer_role(): vector<u8> { ERC20ENFORCER_ROLE }
+    public fun enforcement_role(): vector<u8> { ENFORCEMENT_ROLE }
     public fun snapshooter_role(): vector<u8> { SNAPSHOOTER_ROLE }
     public fun document_role(): vector<u8> { DOCUMENT_ROLE }
     public fun extra_information_role(): vector<u8> { EXTRA_INFORMATION_ROLE }

@@ -911,7 +911,7 @@ module move_cmtat::rule_engine_v2_tests {
         test_scenario::end(scenario_val);
     }
 
-    // ============ ERC-1404 INTERFACE TEST ============
+    // ============ CMTAT TRANSFER RESTRICTION INTERFACE TEST ============
 
     #[test]
     fun test_detect_transfer_restriction() {

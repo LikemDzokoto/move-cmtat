@@ -1,4 +1,4 @@
-/// Document Registry Component - ERC-1643 Compliant Document Management
+/// Document Registry Component - CMTAT Compliant Document Management
 /// Manages on-chain documents for debt securities (Prospectus, Indenture, Terms)
 /// Implements document tracking with hash, URI, and modification history
 #[allow(unused_field)]
@@ -17,7 +17,7 @@ module move_cmtat::document_registry {
 
     // ========== STRUCTS ==========
     
-    /// Document structure following ERC-1643 specification
+    /// Document structure for CMTAT compliant document management
     public struct Document has copy, drop, store {
         name: String,               // Document name (e.g., "Prospectus", "Indenture")
         hash: String,               // Document hash (e.g., SHA-256, IPFS CID)

@@ -48,7 +48,7 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 
 **State Components:**
 - **Allowlist** - Whitelist management with enable/disable
-- **Document Registry** - ERC-1643 compliant document management (comprehensive implementation)
+- **Document Registry** - CMTAT compliant document management (comprehensive implementation)
 - **Debt** - Basic debt structure with credit events tracking
 
 ### ⚠️ Integration Work Required
@@ -183,7 +183,7 @@ Four contract implementations offering different feature sets:
 ### Light CMTAT
 **Purpose:** Minimal compliance for standard tokens  
 **Capabilities:** AdminCap, MintCap, BurnCap, PauseCap, EnforcerCap  
-**Features:** Basic ERC-20 functionality, native DenyList compliance, batch operations  
+**Features:** Core token functionality, native DenyList compliance, batch operations  
 **Use Case:** Simple securities, basic compliance requirements
 
 ### Allowlist CMTAT  
@@ -259,7 +259,7 @@ Four contract implementations offering different feature sets:
 - Margin requirement enforcement
 
 **Document Registry Integration:**
-- ERC-1643 compliant document management
+- CMTAT compliant document management
 - Legal document linking (prospectus, indenture)
 
 ---
@@ -278,7 +278,7 @@ A comprehensive rule validation system implementing hierarchical compliance chec
 
 ### Restriction Codes
 
-Implements ERC-1404 compatible restriction codes:
+Implements CMTAT compliant transfer restriction codes:
 
 - `0` - Valid (transfer allowed)
 - `1` - Paused (contract is paused)
@@ -345,7 +345,7 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 ### Current Compliance: 68%
 
 **Fully Compliant Areas:**
-- Core ERC-20 functionality (via native Coin<T>)
+- Core token functionality (via native Coin<T>)
 - Mint/Burn operations
 - Pause/Freeze (via native DenyList)
 - Access control (capability-based)

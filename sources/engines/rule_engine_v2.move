@@ -498,7 +498,7 @@ module move_cmtat::rule_engine_v2 {
         }
     }
 
-    // ============ ERC-1404 INTERFACE ============
+    // ============ CMTAT TRANSFER RESTRICTION INTERFACE ============
 
     public fun detect_transfer_restriction(
         rule_engine: &RuleEngine,
