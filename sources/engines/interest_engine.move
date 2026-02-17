@@ -649,7 +649,7 @@ module move_cmtat::interest_engine {
                     matched = false;
                     break
                 };
-                j = j + 1;
+                j = j + 1;  
             };
             
             if (matched) {
