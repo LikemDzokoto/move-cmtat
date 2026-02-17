@@ -9,7 +9,7 @@ module move_cmtat::standard_cmtat {
     use iota::clock::{Self, Clock};
     use iota::event;
 
-    use move_cmtat::validation;
+    use move_cmtat::rule_engine_v2;
     use move_cmtat::snapshot_engine;
 
 
@@ -175,7 +175,7 @@ module move_cmtat::standard_cmtat {
 
     // ========== ERC-1404 TRANSFER VALIDATION ==========
     public fun message_for_transfer_restriction(code: u8): String {
-        validation::get_restriction_message(code)
+        rule_engine_v2::message_for_restriction_code(code)
     }
 
     // ========== ADMINISTRATIVE FUNCTIONS ==========
