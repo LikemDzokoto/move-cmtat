@@ -185,6 +185,61 @@ module move_cmtat::allowlist_cmtat {
         allowlist::is_enabled(&compliance_state.allowlist_state)
     }
 
+    // ========== CAPABILITY GRANTING ==========
+    public entry fun grant_minter(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        let mint_cap = MintCap { id: object::new(ctx) };
+        transfer::transfer(mint_cap, to);
+    }
+
+    public entry fun grant_burner(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        let burn_cap = BurnCap { id: object::new(ctx) };
+        transfer::transfer(burn_cap, to);
+    }
+
+    public entry fun grant_pauser(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        let pause_cap = PauseCap { id: object::new(ctx) };
+        transfer::transfer(pause_cap, to);
+    }
+
+    public entry fun grant_enforcer(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        let enforcer_cap = EnforcerCap { id: object::new(ctx) };
+        transfer::transfer(enforcer_cap, to);
+    }
+
+    public entry fun grant_snapshooter(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        let snapshot_cap = SnapshotCap { id: object::new(ctx) };
+        transfer::transfer(snapshot_cap, to);
+    }
+
+    public entry fun grant_allowlist_manager(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        let allowlist_cap = AllowlistCap { id: object::new(ctx) };
+        transfer::transfer(allowlist_cap, to);
+    }
+
     // ========== ADMINISTRATIVE FUNCTIONS ==========
     public entry fun set_terms(
         _admin_cap: &AdminCap,

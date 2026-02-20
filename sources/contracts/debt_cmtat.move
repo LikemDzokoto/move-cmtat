@@ -205,6 +205,61 @@ module move_cmtat::debt_cmtat {
         debt::is_default_flagged(&compliance_state.debt_state)
     }
 
+    // ========== CAPABILITY GRANTING ==========
+    public entry fun grant_minter(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let mint_cap = MintCap { id: object::new(ctx) };
+        transfer::transfer(mint_cap, to);
+    }
+
+    public entry fun grant_burner(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let burn_cap = BurnCap { id: object::new(ctx) };
+        transfer::transfer(burn_cap, to);
+    }
+
+    public entry fun grant_pauser(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let pause_cap = PauseCap { id: object::new(ctx) };
+        transfer::transfer(pause_cap, to);
+    }
+
+    public entry fun grant_enforcer(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let enforcer_cap = EnforcerCap { id: object::new(ctx) };
+        transfer::transfer(enforcer_cap, to);
+    }
+
+    public entry fun grant_snapshooter(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let snapshot_cap = SnapshotCap { id: object::new(ctx) };
+        transfer::transfer(snapshot_cap, to);
+    }
+
+    public entry fun grant_debt_manager(
+        _admin_cap: &AdminCap,
+        to: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let debt_cap = DebtCap { id: object::new(ctx) };
+        transfer::transfer(debt_cap, to);
+    }
+
     // ========== ADMINISTRATIVE FUNCTIONS ==========
     public entry fun set_terms(
         _admin_cap: &AdminCap,

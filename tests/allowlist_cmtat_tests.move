@@ -7,7 +7,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
     use iota::deny_list::{Self, DenyList};
 
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry, AllowlistCMTATState, ComplianceState,
-                                       AdminCap, AllowlistCap, SnapshotCap};
+                                       AdminCap, AllowlistCap, SnapshotCap, MintCap, BurnCap, PauseCap, EnforcerCap};
 
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1;
@@ -199,6 +199,156 @@ module move_cmtat::allowlist_cmtat_tests_new {
 
             test_scenario::return_shared(compliance_state);
             test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_minter() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<MintCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_burner() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_burner(&admin_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<BurnCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_pauser() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<PauseCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_enforcer() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<EnforcerCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_snapshooter() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_snapshooter(&admin_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<SnapshotCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_allowlist_manager() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_allowlist_manager(&admin_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<AllowlistCap>(scenario), 0);
         };
 
         test_scenario::end(scenario_val);
