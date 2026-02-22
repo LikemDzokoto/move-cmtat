@@ -3,8 +3,9 @@
 module move_cmtat::allowlist_cmtat_tests_new {
     use std::string;
     use iota::test_scenario::{Self};
-    use iota::coin::{DenyCapV1, TreasuryCap};
+    use iota::coin::{Self, DenyCapV1, TreasuryCap};
     use iota::deny_list::{Self, DenyList};
+    use iota::transfer;
 
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry, AllowlistCMTATState, ComplianceState,
                                        AdminCap, AllowlistCap, SnapshotCap, MintCap, BurnCap, PauseCap, EnforcerCap};
@@ -363,6 +364,299 @@ module move_cmtat::allowlist_cmtat_tests_new {
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<AllowlistCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_granted_minter_can_mint() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let coins = allowlist_cmtat::mint(
+                &minter_cap,
+                &mut treasury_cap,
+                &registry,
+                &compliance_state,
+                &deny_list,
+                USER2,
+                1000,
+                ctx
+            );
+            assert!(coin::value(&coins) == 1000, 0);
+
+            transfer::public_transfer(coins, ADMIN);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_transfer_when_not_allowlisted_fails() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+            test_scenario::return_shared(compliance_state);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let coins = allowlist_cmtat::mint(
+                &minter_cap,
+                &mut treasury_cap,
+                &registry,
+                &compliance_state,
+                &deny_list,
+                ADMIN,
+                1000,
+                ctx
+            );
+
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
+
+            transfer::public_transfer(coins, ADMIN);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_transfer_when_allowlisted_enabled() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true, ctx);
+            
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+            test_scenario::return_shared(compliance_state);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let coins = allowlist_cmtat::mint(
+                &minter_cap,
+                &mut treasury_cap,
+                &registry,
+                &compliance_state,
+                &deny_list,
+                USER2,
+                1000,
+                ctx
+            );
+
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
+
+            transfer::public_transfer(coins, USER2);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_pause_unpause() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            allowlist_cmtat::pause(&pause_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+
+            test_scenario::return_to_sender(scenario, pause_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            allowlist_cmtat::unpause(&pause_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+
+            test_scenario::return_to_sender(scenario, pause_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_freeze_unfreeze() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            allowlist_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            allowlist_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, false, ctx);
+
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_batch_set_address_allowlist() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            let accounts = vector[USER1, USER2];
+            let statuses = vector[true, true];
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::batch_set_address_allowlist(&allowlist_cap, &mut compliance_state, accounts, statuses, ctx);
+            
+            assert!(allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 0);
+            assert!(allowlist_cmtat::is_allowlisted(&compliance_state, USER2), 1);
+            
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+            test_scenario::return_shared(compliance_state);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_deactivated_mint_fails() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            allowlist_cmtat::deactivate_contract(&admin_cap, &mut registry, &mut deny_list, &mut deny_cap, ctx);
+            assert!(allowlist_cmtat::deactivated(&registry), 0);
+
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
         };
 
         test_scenario::end(scenario_val);

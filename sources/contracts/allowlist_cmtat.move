@@ -282,6 +282,55 @@ module move_cmtat::allowlist_cmtat {
         transfer::public_transfer(allowlist_cap, to);
     }
 
+    // ========== CAPABILITY REVOKING ==========
+    public entry fun revoke_minter(
+        _admin_cap: &AdminCap,
+        minter_cap: MintCap,
+    ) {
+        let MintCap { id } = minter_cap;
+        object::delete(id);
+    }
+
+    public entry fun revoke_burner(
+        _admin_cap: &AdminCap,
+        burn_cap: BurnCap,
+    ) {
+        let BurnCap { id } = burn_cap;
+        object::delete(id);
+    }
+
+    public entry fun revoke_pauser(
+        _admin_cap: &AdminCap,
+        pause_cap: PauseCap,
+    ) {
+        let PauseCap { id } = pause_cap;
+        object::delete(id);
+    }
+
+    public entry fun revoke_enforcer(
+        _admin_cap: &AdminCap,
+        enforcer_cap: EnforcerCap,
+    ) {
+        let EnforcerCap { id } = enforcer_cap;
+        object::delete(id);
+    }
+
+    public entry fun revoke_snapshooter(
+        _admin_cap: &AdminCap,
+        snapshot_cap: SnapshotCap,
+    ) {
+        let SnapshotCap { id } = snapshot_cap;
+        object::delete(id);
+    }
+
+    public entry fun revoke_allowlist_manager(
+        _admin_cap: &AdminCap,
+        allowlist_cap: AllowlistCap,
+    ) {
+        let AllowlistCap { id } = allowlist_cap;
+        object::delete(id);
+    }
+
     // ========== ADMINISTRATIVE FUNCTIONS ==========
     public entry fun set_terms(
         _admin_cap: &AdminCap,
@@ -522,6 +571,30 @@ module move_cmtat::allowlist_cmtat {
             account,
             status,
         });
+    }
+
+    public entry fun batch_set_address_allowlist(
+        _allowlist_cap: &AllowlistCap,
+        compliance_state: &mut ComplianceState,
+        accounts: vector<address>,
+        statuses: vector<bool>,
+        ctx: &mut TxContext
+    ) {
+        let sender = tx_context::sender(ctx);
+        allowlist::batch_set_address_allowlist(&mut compliance_state.allowlist_state, accounts, statuses);
+
+        let len = vector::length(&accounts);
+        let mut i = 0;
+        while (i < len) {
+            let account = *vector::borrow(&accounts, i);
+            let status = *vector::borrow(&statuses, i);
+            event::emit(AddressAllowlistedUpdated {
+                allowlist_manager: sender,
+                account,
+                status,
+            });
+            i = i + 1;
+        };
     }
 
     // ========== SNAPSHOT FUNCTIONS ==========

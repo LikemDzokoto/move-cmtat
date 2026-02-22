@@ -76,4 +76,48 @@ module move_cmtat::allowlist {
     public fun require_allowlisted(state: &AllowlistState, account: address) {
         assert!(is_allowlisted(state, account), ENotAllowlisted);
     }
+
+    /// Get count of allowlisted addresses
+    public fun get_count(state: &AllowlistState): u64 {
+        table::length(&state.allowlisted)
+    }
+
+    /// Remove address from allowlist
+    public fun remove_address(state: &mut AllowlistState, account: address) {
+        if (table::contains(&state.allowlisted, account)) {
+            table::remove(&mut state.allowlisted, account);
+        };
+    }
+
+    /// Batch remove addresses from allowlist
+    public fun batch_remove_addresses(
+        state: &mut AllowlistState,
+        accounts: vector<address>
+    ) {
+        let len = vector::length(&accounts);
+        let mut i = 0;
+        while (i < len) {
+            let account = *vector::borrow(&accounts, i);
+            if (table::contains(&state.allowlisted, account)) {
+                table::remove(&mut state.allowlisted, account);
+            };
+            i = i + 1;
+        }
+    }
+
+    /// Clear all addresses from allowlist (caller provides addresses to remove)
+    public fun clear_all(
+        state: &mut AllowlistState,
+        accounts: vector<address>
+    ) {
+        let len = vector::length(&accounts);
+        let mut i = 0;
+        while (i < len) {
+            let account = *vector::borrow(&accounts, i);
+            if (table::contains(&state.allowlisted, account)) {
+                table::remove(&mut state.allowlisted, account);
+            };
+            i = i + 1;
+        }
+    }
 }
