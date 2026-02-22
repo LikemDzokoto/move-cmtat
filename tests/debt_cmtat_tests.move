@@ -64,7 +64,8 @@ module move_cmtat::debt_cmtat_tests_new {
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
 
             let debt_info = string::utf8(b"5% Annual Coupon Bond, Maturity 2030");
-            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, debt_info);
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, debt_info, ctx);
 
             assert!(debt_cmtat::debt(&compliance_state) == debt_info, 0);
 
@@ -86,6 +87,7 @@ module move_cmtat::debt_cmtat_tests_new {
         {
             let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
             debt_cmtat::set_credit_events(
                 &debt_cap,
@@ -96,6 +98,7 @@ module move_cmtat::debt_cmtat_tests_new {
                 string::utf8(b"AAA"),  // rating
                 0,      // principal_distributed
                 0,      // next_coupon_date
+                ctx,
             );
 
             let _events = debt_cmtat::credit_events(&compliance_state);
@@ -118,8 +121,9 @@ module move_cmtat::debt_cmtat_tests_new {
         {
             let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-            debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE);
+            debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE, ctx);
 
             assert!(debt_cmtat::debt_engine(&compliance_state) == DEBT_ENGINE, 0);
 
@@ -214,10 +218,12 @@ module move_cmtat::debt_cmtat_tests_new {
         {
             let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
             debt_cmtat::set_debt(&debt_cap, &mut compliance_state,
-                string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"));
+                string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"), ctx);
 
+            let ctx = test_scenario::ctx(scenario);
             debt_cmtat::set_credit_events(
                 &debt_cap,
                 &mut compliance_state,
@@ -227,9 +233,11 @@ module move_cmtat::debt_cmtat_tests_new {
                 string::utf8(b"AAA"),
                 0,
                 0,
+                ctx,
             );
 
-            debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE);
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::set_debt_engine(&debt_cap, &mut compliance_state, DEBT_ENGINE, ctx);
 
             assert!(debt_cmtat::debt(&compliance_state) ==
                 string::utf8(b"5.5% Annual Coupon, Maturity 2030-12-31"), 0);

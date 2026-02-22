@@ -625,9 +625,10 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
 
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -654,10 +655,13 @@ module move_cmtat::light_cmtat_tests_new {
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
             let mut registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-            light_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"));
-            light_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"New Info"));
-            light_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TOKEN123"));
+            light_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"New Info"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TOKEN123"), ctx);
 
             assert!(light_cmtat::terms(&registry) == string::utf8(b"New Terms"), 0);
             assert!(light_cmtat::information(&registry) == string::utf8(b"New Info"), 1);

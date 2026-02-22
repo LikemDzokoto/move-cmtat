@@ -3,7 +3,7 @@
 module move_cmtat::allowlist_cmtat_tests_new {
     use std::string;
     use iota::test_scenario::{Self};
-    use iota::coin::{DenyCapV1};
+    use iota::coin::{DenyCapV1, TreasuryCap};
     use iota::deny_list::{Self, DenyList};
 
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry, AllowlistCMTATState, ComplianceState,
@@ -66,10 +66,12 @@ module move_cmtat::allowlist_cmtat_tests_new {
 
             assert!(!allowlist_cmtat::allowlist_enabled(&compliance_state), 0);
 
-            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
             assert!(allowlist_cmtat::allowlist_enabled(&compliance_state), 1);
 
-            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, false);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, false, ctx);
             assert!(!allowlist_cmtat::allowlist_enabled(&compliance_state), 2);
 
             test_scenario::return_shared(compliance_state);
@@ -91,13 +93,16 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
 
-            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
 
-            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, true);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, true, ctx);
             assert!(allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 0);
             assert!(!allowlist_cmtat::is_allowlisted(&compliance_state, USER2), 1);
 
-            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, false);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, false, ctx);
             assert!(!allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 2);
 
             test_scenario::return_shared(compliance_state);
@@ -166,11 +171,15 @@ module move_cmtat::allowlist_cmtat_tests_new {
         {
             let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-            allowlist_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"Terms"));
-            allowlist_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"Info"));
-            allowlist_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"ID123"));
-            allowlist_cmtat::set_document_uri(&admin_cap, &mut registry, string::utf8(b"https://example.com"));
+            allowlist_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"Terms"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"Info"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"ID123"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_document_uri(&admin_cap, &mut registry, string::utf8(b"https://example.com"), ctx);
 
             assert!(allowlist_cmtat::document_uri(&registry) == string::utf8(b"https://example.com"), 0);
 
@@ -214,9 +223,10 @@ module move_cmtat::allowlist_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            allowlist_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -239,9 +249,10 @@ module move_cmtat::allowlist_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            allowlist_cmtat::grant_burner(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_burner(&admin_cap, treasury_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -264,9 +275,10 @@ module move_cmtat::allowlist_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            allowlist_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -289,9 +301,10 @@ module move_cmtat::allowlist_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            allowlist_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -339,9 +352,10 @@ module move_cmtat::allowlist_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            allowlist_cmtat::grant_allowlist_manager(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_allowlist_manager(&admin_cap, allowlist_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };

@@ -85,6 +85,39 @@ module move_cmtat::debt_cmtat {
         debt_cap_holder: address,
     }
 
+    public struct TermsUpdated has copy, drop {
+        admin: address,
+        new_terms: String,
+    }
+
+    public struct InformationUpdated has copy, drop {
+        admin: address,
+        new_information: String,
+    }
+
+    public struct TokenIdUpdated has copy, drop {
+        admin: address,
+        new_token_id: String,
+    }
+
+    public struct DocumentUriUpdated has copy, drop {
+        admin: address,
+        new_document_uri: String,
+    }
+
+    public struct DebtUpdated has copy, drop {
+        debt_manager: address,
+    }
+
+    public struct CreditEventsUpdated has copy, drop {
+        debt_manager: address,
+    }
+
+    public struct DebtEngineUpdated has copy, drop {
+        debt_manager: address,
+        engine: address,
+    }
+
     // ========== ERRORS ==========
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
@@ -206,40 +239,49 @@ module move_cmtat::debt_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
+    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
+        treasury_cap: TreasuryCap<DEBT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let mint_cap = MintCap { id: object::new(ctx) };
         transfer::transfer(mint_cap, to);
+        transfer::public_transfer(treasury_cap, to);
     }
 
     public entry fun grant_burner(
         _admin_cap: &AdminCap,
+        treasury_cap: TreasuryCap<DEBT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let burn_cap = BurnCap { id: object::new(ctx) };
         transfer::transfer(burn_cap, to);
+        transfer::public_transfer(treasury_cap, to);
     }
 
     public entry fun grant_pauser(
         _admin_cap: &AdminCap,
+        deny_cap: DenyCapV1<DEBT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let pause_cap = PauseCap { id: object::new(ctx) };
         transfer::transfer(pause_cap, to);
+        transfer::public_transfer(deny_cap, to);
     }
 
     public entry fun grant_enforcer(
         _admin_cap: &AdminCap,
+        deny_cap: DenyCapV1<DEBT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let enforcer_cap = EnforcerCap { id: object::new(ctx) };
         transfer::transfer(enforcer_cap, to);
+        transfer::public_transfer(deny_cap, to);
     }
 
     public entry fun grant_snapshooter(
@@ -253,53 +295,88 @@ module move_cmtat::debt_cmtat {
 
     public entry fun grant_debt_manager(
         _admin_cap: &AdminCap,
+        debt_cap: DebtCap,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
-        let debt_cap = DebtCap { id: object::new(ctx) };
-        transfer::transfer(debt_cap, to);
+        let new_debt_cap = DebtCap { id: object::new(ctx) };
+        transfer::transfer(new_debt_cap, to);
+        transfer::public_transfer(debt_cap, to);
     }
 
     // ========== ADMINISTRATIVE FUNCTIONS ==========
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        new_terms: String
+        new_terms: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.terms = new_terms;
+
+        event::emit(TermsUpdated {
+            admin,
+            new_terms,
+        });
     }
 
     public entry fun set_information(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        new_info: String
+        new_info: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.information = new_info;
+
+        event::emit(InformationUpdated {
+            admin,
+            new_information: new_info,
+        });
     }
 
     public entry fun set_token_id(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        new_id: String
+        new_id: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.token_id = new_id;
+
+        event::emit(TokenIdUpdated {
+            admin,
+            new_token_id: new_id,
+        });
     }
 
     public entry fun set_document_uri(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        uri: String
+        uri: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.document_uri = uri;
+
+        event::emit(DocumentUriUpdated {
+            admin,
+            new_document_uri: uri,
+        });
     }
 
     // ========== DEBT-SPECIFIC FUNCTIONS ==========
     public entry fun set_debt(
         _debt_cap: &DebtCap,
         compliance_state: &mut ComplianceState,
-        debt_info: String
+        debt_info: String,
+        ctx: &tx_context::TxContext
     ) {
         debt::set_debt(&mut compliance_state.debt_state, debt_info);
+
+        event::emit(DebtUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
     }
 
     public entry fun set_credit_events(
@@ -311,6 +388,7 @@ module move_cmtat::debt_cmtat {
         rating: String,
         principal_distributed: u64,
         next_coupon_date: u64,
+        ctx: &tx_context::TxContext
     ) {
         let credit_events = debt::create_credit_events(
             flag_default,
@@ -321,14 +399,24 @@ module move_cmtat::debt_cmtat {
             next_coupon_date,
         );
         debt::set_credit_events(&mut compliance_state.debt_state, credit_events);
+
+        event::emit(CreditEventsUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
     }
 
     public entry fun set_debt_engine(
         _debt_cap: &DebtCap,
         compliance_state: &mut ComplianceState,
-        engine: address
+        engine: address,
+        ctx: &tx_context::TxContext
     ) {
         debt::set_debt_engine(&mut compliance_state.debt_state, engine);
+
+        event::emit(DebtEngineUpdated {
+            debt_manager: tx_context::sender(ctx),
+            engine,
+        });
     }
 
     public entry fun flag_default(

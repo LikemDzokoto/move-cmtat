@@ -71,6 +71,21 @@ module move_cmtat::light_cmtat {
         admin: address,
     }
 
+    public struct TermsUpdated has copy, drop {
+        admin: address,
+        new_terms: String,
+    }
+
+    public struct InformationUpdated has copy, drop {
+        admin: address,
+        new_information: String,
+    }
+
+    public struct TokenIdUpdated has copy, drop {
+        admin: address,
+        new_token_id: String,
+    }
+
     // ========== ERRORS ==========
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
@@ -119,31 +134,39 @@ module move_cmtat::light_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
+    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
+    // where granting a role gives the user full capability to perform actions
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
+        treasury_cap: TreasuryCap<LIGHT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let minter_cap = MinterCap { id: object::new(ctx) };
         transfer::transfer(minter_cap, to);
+        transfer::public_transfer(treasury_cap, to);
     }
 
     public entry fun grant_pauser(
         _admin_cap: &AdminCap,
+        deny_cap: DenyCapV1<LIGHT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let pauser_cap = PauserCap { id: object::new(ctx) };
         transfer::transfer(pauser_cap, to);
+        transfer::public_transfer(deny_cap, to);
     }
 
     public entry fun grant_enforcer(
         _admin_cap: &AdminCap,
+        deny_cap: DenyCapV1<LIGHT_CMTAT>,
         to: address,
         ctx: &mut tx_context::TxContext
     ) {
         let enforcer_cap = EnforcerCap { id: object::new(ctx) };
         transfer::transfer(enforcer_cap, to);
+        transfer::public_transfer(deny_cap, to);
     }
 
     // ========== VIEW FUNCTIONS ==========
@@ -200,25 +223,46 @@ module move_cmtat::light_cmtat {
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut LightCMTATRegistry,
-        new_terms: String
+        new_terms: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.terms = new_terms;
+
+        event::emit(TermsUpdated {
+            admin,
+            new_terms,
+        });
     }
 
     public entry fun set_information(
         _admin_cap: &AdminCap,
         registry: &mut LightCMTATRegistry,
-        new_info: String
+        new_info: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.information = new_info;
+
+        event::emit(InformationUpdated {
+            admin,
+            new_information: new_info,
+        });
     }
 
     public entry fun set_token_id(
         _admin_cap: &AdminCap,
         registry: &mut LightCMTATRegistry,
-        new_id: String
+        new_id: String,
+        ctx: &mut tx_context::TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.token_id = new_id;
+
+        event::emit(TokenIdUpdated {
+            admin,
+            new_token_id: new_id,
+        });
     }
 
     // ========== MINTING FUNCTIONS ==========

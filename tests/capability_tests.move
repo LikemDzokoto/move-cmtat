@@ -103,6 +103,7 @@ module move_cmtat::capability_tests {
     // ============================================
 
     // 1.1 Positive: Admin grants minter successfully
+    // 1.1 Positive: Admin grants minter successfully (with TreasuryCap transfer)
     #[test]
     fun test_light_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -113,9 +114,11 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            // TreasuryCap is transferred to USER1 along with MinterCap
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -123,12 +126,13 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
+            assert!(test_scenario::has_most_recent_for_sender<TreasuryCap<LIGHT_CMTAT>>(scenario), 1);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    // 1.2 Positive: Admin grants pauser successfully
+    // 1.2 Positive: Admin grants pauser successfully (with DenyCap transfer)
     #[test]
     fun test_light_admin_grants_pauser_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -139,9 +143,11 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            // DenyCap is transferred to USER1 along with PauserCap
+            light_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -149,12 +155,13 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<LightPauserCap>(scenario), 0);
+            assert!(test_scenario::has_most_recent_for_sender<DenyCapV1<LIGHT_CMTAT>>(scenario), 1);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    // 1.3 Positive: Admin grants enforcer successfully
+    // 1.3 Positive: Admin grants enforcer successfully (with DenyCap transfer)
     #[test]
     fun test_light_admin_grants_enforcer_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -165,9 +172,11 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            // DenyCap is transferred to USER1 along with EnforcerCap
+            light_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -175,14 +184,95 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<LightEnforcerCap>(scenario), 0);
+            assert!(test_scenario::has_most_recent_for_sender<DenyCapV1<LIGHT_CMTAT>>(scenario), 1);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    // 1.4 Positive: Granted minter can actually mint (admin performs minting)
+    // 1.4 Positive: Granted minter can actually mint (now USER1 has TreasuryCap!)
     #[test]
     fun test_light_granted_minter_can_mint() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup_light(scenario);
+
+        // Grant minter to USER1 (transfers TreasuryCap too!)
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            // TreasuryCap is transferred to USER1 along with MinterCap
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        // USER1 can now mint! (has both MinterCap AND TreasuryCap)
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let minter_cap = test_scenario::take_from_sender<LightMinterCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER2, 1000, ctx);
+            assert!(coin::value(&coins) == 1000, 0);
+
+            transfer::public_transfer(coins, USER2);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // 1.5 Positive: Granted pauser can actually pause (now USER1 has DenyCap!)
+    #[test]
+    fun test_light_granted_pauser_can_pause() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup_light(scenario);
+
+        // Grant pauser to USER1 (transfers DenyCap too!)
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            // DenyCap is transferred to USER1 along with PauserCap
+            light_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        // USER1 can now pause! (has both PauserCap AND DenyCap)
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let pauser_cap = test_scenario::take_from_sender<LightPauserCap>(scenario);
+            let mut deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+
+            test_scenario::return_to_sender(scenario, pauser_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // 1.16 Complex: Grant minter capability
+    #[test]
+    fun test_light_grant_minter_capability() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -192,73 +282,18 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            test_scenario::return_to_sender(scenario, admin_cap);
-        };
-
-        // Verify USER1 received MinterCap
-        test_scenario::next_tx(scenario, USER1);
-        {
-            assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    // 1.5 Positive: Granted pauser can actually pause (verify grant works)
-    #[test]
-    fun test_light_granted_pauser_can_pause() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup_light(scenario);
-
-        // Grant pauser to USER1
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_pauser(&admin_cap, USER1, ctx);
-            test_scenario::return_to_sender(scenario, admin_cap);
-        };
-
-        // Verify USER1 received PauserCap
-        test_scenario::next_tx(scenario, USER1);
-        {
-            assert!(test_scenario::has_most_recent_for_sender<LightPauserCap>(scenario), 0);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    // 1.16 Complex: Multiple capabilities to same user
-    #[test]
-    fun test_light_multiple_capabilities_to_same_user() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup_light(scenario);
-
-        // Grant all capabilities to USER1
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            light_cmtat::grant_pauser(&admin_cap, USER1, ctx);
-            light_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
-        // Verify USER1 has all capabilities
+        // Verify USER1 has minter capability
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
-            assert!(test_scenario::has_most_recent_for_sender<LightPauserCap>(scenario), 1);
-            assert!(test_scenario::has_most_recent_for_sender<LightEnforcerCap>(scenario), 2);
         };
 
         test_scenario::end(scenario_val);
@@ -276,8 +311,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
@@ -290,37 +326,67 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.18 Complex: User can have multiple different capabilities
+    // 1.18 Complex: Grant pauser capability
     #[test]
-    fun test_light_user_can_have_multiple_capabilities() {
+    fun test_light_grant_pauser_capability() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
         setup_light(scenario);
 
-        // Grant minter and pauser to USER1
+        // Grant pauser to USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            light_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            light_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
         // Verify USER1 has both capabilities
         test_scenario::next_tx(scenario, USER1);
+        // Verify USER1 has pauser capability
+        test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
-            assert!(test_scenario::has_most_recent_for_sender<LightPauserCap>(scenario), 1);
+            assert!(test_scenario::has_most_recent_for_sender<LightPauserCap>(scenario), 0);
         };
 
         test_scenario::end(scenario_val);
     }
 
-    // 1.19 Complex: Granted capabilities independent
+    // 1.19 Complex: Grant enforcer capability
+    #[test]
+    fun test_light_grant_enforcer_capability() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup_light(scenario);
+
+        // Grant enforcer to USER1
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            
+            light_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
+            
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        // Verify USER1 has enforcer capability
+        test_scenario::next_tx(scenario, USER1);
+        {
+            assert!(test_scenario::has_most_recent_for_sender<LightEnforcerCap>(scenario), 0);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // 1.20 Complex: Granted capabilities independent (simplified - grant to one user)
     #[test]
     fun test_light_granted_capabilities_independent() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -328,25 +394,20 @@ module move_cmtat::capability_tests {
 
         setup_light(scenario);
 
-        // Admin grants minter to USER1 and USER2
+        // Admin grants minter to USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            light_cmtat::grant_minter(&admin_cap, USER2, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
-        // Both users can use their minter capabilities independently
+        // USER1 can use their minter capability
         test_scenario::next_tx(scenario, USER1);
-        {
-            assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
-        };
-
-        test_scenario::next_tx(scenario, USER2);
         {
             assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
         };
@@ -354,7 +415,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.20 Complex: Original admin retains access after granting
+    // 1.21 Complex: Original admin retains access after granting
     #[test]
     fun test_light_original_admin_retains_access_after_granting() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -366,19 +427,20 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
-        // Admin can still grant more capabilities
+        // Admin can still grant other capabilities (need new DenyCap)
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             
-            light_cmtat::grant_pauser(&admin_cap, USER2, ctx);
-            light_cmtat::grant_enforcer(&admin_cap, USER2, ctx);
+            light_cmtat::grant_pauser(&admin_cap, deny_cap, USER2, ctx);
             
             test_scenario::return_to_sender(scenario, admin_cap);
         };
@@ -390,7 +452,7 @@ module move_cmtat::capability_tests {
     // SECTION 2: STANDARD CMTAT CAPABILITY TESTS (25 tests)
     // ============================================
 
-    // 2.1-2.5 Positive: Admin grants all 5 capabilities
+    // 2.1 Positive: Admin grants minter capability
     #[test]
     fun test_standard_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -401,8 +463,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
@@ -414,6 +477,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 2.2 Positive: Admin grants burner capability
     #[test]
     fun test_standard_admin_grants_burner_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -424,8 +488,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_burner(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_burner(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
@@ -437,6 +502,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 2.3 Positive: Admin grants pauser capability
     #[test]
     fun test_standard_admin_grants_pauser_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -447,8 +513,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
@@ -460,6 +527,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 2.4 Positive: Admin grants enforcer capability
     #[test]
     fun test_standard_admin_grants_enforcer_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -470,8 +538,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
@@ -483,6 +552,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 2.5 Positive: Admin grants snapshooter capability
     #[test]
     fun test_standard_admin_grants_snapshooter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -506,7 +576,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.6-2.10 Positive: Granted capabilities work (verify grant)
+    // 2.6-2.10 Positive: Granted capabilities work (now with TreasuryCap transfer!)
     #[test]
     fun test_standard_granted_minter_can_mint() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -517,15 +587,30 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            // TreasuryCap is transferred to USER1 along with MintCap
+            standard_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
-        // Verify USER1 received MintCap
+        // USER1 can now mint! (has both MintCap AND TreasuryCap)
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<StandardMintCap>(scenario), 0);
+            let mint_cap = test_scenario::take_from_sender<StandardMintCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<StandardRegistry>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let coins = standard_cmtat::mint(&mint_cap, &mut treasury_cap, &registry, &deny_list, USER2, 1000, ctx);
+            assert!(coin::value(&coins) == 1000, 0);
+
+            transfer::public_transfer(coins, USER2);
+            test_scenario::return_to_sender(scenario, mint_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
         };
 
         test_scenario::end(scenario_val);
@@ -541,8 +626,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_burner(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_burner(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
@@ -565,15 +651,28 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            // DenyCap is transferred to USER1 along with PauseCap
+            standard_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
-        // Verify USER1 received PauseCap
+        // USER1 can now pause! (has both PauseCap AND DenyCap)
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<StandardPauseCap>(scenario), 0);
+            let pause_cap = test_scenario::take_from_sender<StandardPauseCap>(scenario);
+            let mut deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<StandardRegistry>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            standard_cmtat::pause(&pause_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+
+            test_scenario::return_to_sender(scenario, pause_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_shared(registry);
         };
 
         test_scenario::end(scenario_val);
@@ -589,15 +688,26 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            // DenyCap is transferred to USER1 along with EnforcerCap
+            standard_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
 
-        // Verify USER1 received EnforcerCap
+        // USER1 can now freeze! (has both EnforcerCap AND DenyCap)
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<StandardEnforcerCap>(scenario), 0);
+            let enforcer_cap = test_scenario::take_from_sender<StandardEnforcerCap>(scenario);
+            let mut deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            standard_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER2, true, ctx);
+
+            test_scenario::return_to_sender(scenario, enforcer_cap);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, deny_cap);
         };
 
         test_scenario::end(scenario_val);
@@ -655,22 +765,19 @@ module move_cmtat::capability_tests {
         let scenario = &mut scenario_val;
         setup_standard(scenario);
         
-        // Admin can grant all capabilities
+        // Admin grants minter capability
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            standard_cmtat::grant_burner(&admin_cap, USER2, ctx);
+            standard_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
-        // Verify both users received their capabilities
+        // Verify USER1 received the capability
         test_scenario::next_tx(scenario, USER1);
         { assert!(test_scenario::has_most_recent_for_sender<StandardMintCap>(scenario), 0); };
-        
-        test_scenario::next_tx(scenario, USER2);
-        { assert!(test_scenario::has_most_recent_for_sender<StandardBurnCap>(scenario), 0); };
         
         test_scenario::end(scenario_val);
     }
@@ -679,7 +786,7 @@ module move_cmtat::capability_tests {
     // SECTION 3: DEBT CMTAT CAPABILITY TESTS (20 tests)
     // ====================================
 
-    // 3.1-3.6 Positive: Admin grants all 6 capabilities
+    // 3.1 Positive: Admin grants minter
     #[test]
     fun test_debt_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -688,8 +795,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -697,6 +805,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 3.2 Positive: Admin grants burner
     #[test]
     fun test_debt_admin_grants_burner_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -705,8 +814,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_burner(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_burner(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -714,6 +824,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 3.3 Positive: Admin grants pauser
     #[test]
     fun test_debt_admin_grants_pauser_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -722,8 +833,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -731,6 +843,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 3.4 Positive: Admin grants enforcer
     #[test]
     fun test_debt_admin_grants_enforcer_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -739,8 +852,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -748,6 +862,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 3.5 Positive: Admin grants snapshooter (no cap needed)
     #[test]
     fun test_debt_admin_grants_snapshooter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -765,6 +880,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
+    // 3.6 Positive: Admin grants debt manager
     #[test]
     fun test_debt_admin_grants_debt_manager_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -773,8 +889,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_debt_manager(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_debt_manager(&admin_cap, debt_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -782,7 +899,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.7-3.13 Positive: Granted capabilities work (verify grant)
+    // 3.7-3.13 Positive: Granted capabilities work (now with TreasuryCap transfer!)
     #[test]
     fun test_debt_granted_minter_can_mint() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -791,14 +908,29 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            // TreasuryCap is transferred to USER1 along with MintCap
+            debt_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
-        // Verify USER1 received MintCap
+        // USER1 can now mint! (has both MintCap AND TreasuryCap)
         test_scenario::next_tx(scenario, USER1);
         {
-            assert!(test_scenario::has_most_recent_for_sender<DebtMintCap>(scenario), 0);
+            let mint_cap = test_scenario::take_from_sender<DebtMintCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<DebtRegistry>(scenario);
+            let compliance_state = test_scenario::take_shared<DebtComplianceState>(scenario);
+            let deny_list = test_scenario::take_shared<DenyList>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            let coins = debt_cmtat::mint(&mint_cap, &mut treasury_cap, &registry, &compliance_state, &deny_list, USER2, 1000, ctx);
+            assert!(coin::value(&coins) == 1000, 0);
+            transfer::public_transfer(coins, USER2);
+            test_scenario::return_to_sender(scenario, mint_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
         };
         test_scenario::end(scenario_val);
     }
@@ -811,15 +943,17 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_debt_manager(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_debt_manager(&admin_cap, debt_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
         {
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
             let mut compliance_state = test_scenario::take_shared<DebtComplianceState>(scenario);
-            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, string::utf8(b"Test Debt Info"));
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, string::utf8(b"Test Debt Info"), ctx);
             test_scenario::return_to_sender(scenario, debt_cap);
             test_scenario::return_shared(compliance_state);
         };
@@ -834,8 +968,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_debt_manager(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_debt_manager(&admin_cap, debt_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -870,8 +1005,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -887,8 +1023,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_burner(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_burner(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -904,8 +1041,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_pauser(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -921,8 +1059,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_enforcer(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_enforcer(&admin_cap, deny_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -955,8 +1094,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_allowlist_manager(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_allowlist_manager(&admin_cap, allowlist_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -973,8 +1113,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_allowlist_manager(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_allowlist_manager(&admin_cap, allowlist_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
@@ -982,7 +1123,8 @@ module move_cmtat::capability_tests {
             let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
             let mut compliance_state = test_scenario::take_shared<AllowlistComplianceState>(scenario);
             assert!(!allowlist_cmtat::allowlist_enabled(&compliance_state), 0);
-            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
             assert!(allowlist_cmtat::allowlist_enabled(&compliance_state), 1);
             test_scenario::return_to_sender(scenario, allowlist_cap);
             test_scenario::return_shared(compliance_state);
@@ -998,15 +1140,17 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_allowlist_manager(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_allowlist_manager(&admin_cap, allowlist_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         test_scenario::next_tx(scenario, USER1);
         {
             let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
             let mut compliance_state = test_scenario::take_shared<AllowlistComplianceState>(scenario);
-            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true);
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true, ctx);
             assert!(allowlist_cmtat::is_allowlisted(&compliance_state, USER2), 0);
             test_scenario::return_to_sender(scenario, allowlist_cap);
             test_scenario::return_shared(compliance_state);
@@ -1038,8 +1182,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
@@ -1076,8 +1221,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
@@ -1097,44 +1243,43 @@ module move_cmtat::capability_tests {
         let scenario = &mut scenario_val;
         setup_standard(scenario);
         
-        // Grant multiple capabilities to USER1
+        // Grant minter capability to USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            standard_cmtat::grant_pauser(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
-        // USER1 should have both
+        // USER1 should have minter capability
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<StandardMintCap>(scenario), 0);
-            assert!(test_scenario::has_most_recent_for_sender<StandardPauseCap>(scenario), 1);
         };
         
         test_scenario::end(scenario_val);
     }
 
-    // 6.3 Multiple grants to same user (idempotent behavior)
+    // 6.3 Grant capability to user
     #[test]
-    fun test_multiple_grants_to_same_user() {
+    fun test_grant_capability_to_user() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
         setup_light(scenario);
         
-        // Grant minter to USER1 twice
+        // Grant minter to USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<LightAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            light_cmtat::grant_minter(&admin_cap, USER1, ctx); // Second grant
+            light_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
-        // USER1 should have received both (multiple capabilities)
+        // USER1 should have received the capability
         test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<LightMinterCap>(scenario), 0);
@@ -1150,13 +1295,13 @@ module move_cmtat::capability_tests {
         let scenario = &mut scenario_val;
         setup_debt(scenario);
         
-        // Admin grants all capabilities to USER1
+        // Admin grants minter to USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_minter(&admin_cap, USER1, ctx);
-            debt_cmtat::grant_debt_manager(&admin_cap, USER1, ctx);
+            debt_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
@@ -1165,7 +1310,8 @@ module move_cmtat::capability_tests {
         {
             let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
             let mut registry = test_scenario::take_shared<DebtRegistry>(scenario);
-            debt_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"Admin still works"));
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"Admin still works"), ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
             test_scenario::return_shared(registry);
         };
@@ -1184,8 +1330,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<AllowlistAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            allowlist_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            allowlist_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
@@ -1220,14 +1367,15 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            // Admin grants minter to self
-            standard_cmtat::grant_minter(&admin_cap, ADMIN, ctx);
+            // Admin grants minter to USER1
+            standard_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         
-        // Admin now has multiple minter caps
-        test_scenario::next_tx(scenario, ADMIN);
+        // USER1 now has minter capability
+        test_scenario::next_tx(scenario, USER1);
         {
             assert!(test_scenario::has_most_recent_for_sender<StandardMintCap>(scenario), 0);
         };
@@ -1261,8 +1409,9 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let admin_cap = test_scenario::take_from_sender<StandardAdminCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::grant_minter(&admin_cap, USER1, ctx);
+            standard_cmtat::grant_minter(&admin_cap, treasury_cap, USER1, ctx);
             test_scenario::return_to_sender(scenario, admin_cap);
         };
         

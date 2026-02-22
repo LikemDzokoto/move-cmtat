@@ -79,6 +79,37 @@ module move_cmtat::allowlist_cmtat {
         admin: address,
     }
 
+    public struct TermsUpdated has copy, drop {
+        admin: address,
+        new_terms: String,
+    }
+
+    public struct InformationUpdated has copy, drop {
+        admin: address,
+        new_information: String,
+    }
+
+    public struct TokenIdUpdated has copy, drop {
+        admin: address,
+        new_token_id: String,
+    }
+
+    public struct DocumentUriUpdated has copy, drop {
+        admin: address,
+        new_document_uri: String,
+    }
+
+    public struct AllowlistEnabled has copy, drop {
+        allowlist_manager: address,
+        enabled: bool,
+    }
+
+    public struct AddressAllowlistedUpdated has copy, drop {
+        allowlist_manager: address,
+        account: address,
+        status: bool,
+    }
+
     // ========== ERRORS ==========
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
@@ -186,40 +217,49 @@ module move_cmtat::allowlist_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
+    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
+        treasury_cap: TreasuryCap<ALLOWLIST_CMTAT>,
         to: address,
         ctx: &mut TxContext
     ) {
         let mint_cap = MintCap { id: object::new(ctx) };
         transfer::transfer(mint_cap, to);
+        transfer::public_transfer(treasury_cap, to);
     }
 
     public entry fun grant_burner(
         _admin_cap: &AdminCap,
+        treasury_cap: TreasuryCap<ALLOWLIST_CMTAT>,
         to: address,
         ctx: &mut TxContext
     ) {
         let burn_cap = BurnCap { id: object::new(ctx) };
         transfer::transfer(burn_cap, to);
+        transfer::public_transfer(treasury_cap, to);
     }
 
     public entry fun grant_pauser(
         _admin_cap: &AdminCap,
+        deny_cap: DenyCapV1<ALLOWLIST_CMTAT>,
         to: address,
         ctx: &mut TxContext
     ) {
         let pause_cap = PauseCap { id: object::new(ctx) };
         transfer::transfer(pause_cap, to);
+        transfer::public_transfer(deny_cap, to);
     }
 
     public entry fun grant_enforcer(
         _admin_cap: &AdminCap,
+        deny_cap: DenyCapV1<ALLOWLIST_CMTAT>,
         to: address,
         ctx: &mut TxContext
     ) {
         let enforcer_cap = EnforcerCap { id: object::new(ctx) };
         transfer::transfer(enforcer_cap, to);
+        transfer::public_transfer(deny_cap, to);
     }
 
     public entry fun grant_snapshooter(
@@ -233,44 +273,74 @@ module move_cmtat::allowlist_cmtat {
 
     public entry fun grant_allowlist_manager(
         _admin_cap: &AdminCap,
+        allowlist_cap: AllowlistCap,
         to: address,
         ctx: &mut TxContext
     ) {
-        let allowlist_cap = AllowlistCap { id: object::new(ctx) };
-        transfer::transfer(allowlist_cap, to);
+        let new_allowlist_cap = AllowlistCap { id: object::new(ctx) };
+        transfer::transfer(new_allowlist_cap, to);
+        transfer::public_transfer(allowlist_cap, to);
     }
 
     // ========== ADMINISTRATIVE FUNCTIONS ==========
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        new_terms: String
+        new_terms: String,
+        ctx: &mut TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.terms = new_terms;
+
+        event::emit(TermsUpdated {
+            admin,
+            new_terms,
+        });
     }
 
     public entry fun set_information(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        new_info: String
+        new_info: String,
+        ctx: &mut TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.information = new_info;
+
+        event::emit(InformationUpdated {
+            admin,
+            new_information: new_info,
+        });
     }
 
     public entry fun set_token_id(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        new_id: String
+        new_id: String,
+        ctx: &mut TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.token_id = new_id;
+
+        event::emit(TokenIdUpdated {
+            admin,
+            new_token_id: new_id,
+        });
     }
 
     public entry fun set_document_uri(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
-        uri: String
+        uri: String,
+        ctx: &mut TxContext
     ) {
+        let admin = tx_context::sender(ctx);
         registry.document_uri = uri;
+
+        event::emit(DocumentUriUpdated {
+            admin,
+            new_document_uri: uri,
+        });
     }
 
     // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
@@ -427,18 +497,31 @@ module move_cmtat::allowlist_cmtat {
     public entry fun enable_allowlist(
         _allowlist_cap: &AllowlistCap,
         compliance_state: &mut ComplianceState,
-        enabled: bool
+        enabled: bool,
+        ctx: &mut TxContext
     ) {
         allowlist::set_enabled(&mut compliance_state.allowlist_state, enabled);
+
+        event::emit(AllowlistEnabled {
+            allowlist_manager: tx_context::sender(ctx),
+            enabled,
+        });
     }
 
     public entry fun set_address_allowlist(
         _allowlist_cap: &AllowlistCap,
         compliance_state: &mut ComplianceState,
         account: address,
-        status: bool
+        status: bool,
+        ctx: &mut TxContext
     ) {
         allowlist::set_address_allowlist(&mut compliance_state.allowlist_state, account, status);
+
+        event::emit(AddressAllowlistedUpdated {
+            allowlist_manager: tx_context::sender(ctx),
+            account,
+            status,
+        });
     }
 
     // ========== SNAPSHOT FUNCTIONS ==========

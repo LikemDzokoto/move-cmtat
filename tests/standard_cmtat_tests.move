@@ -159,11 +159,15 @@ module move_cmtat::standard_cmtat_tests {
         {
             let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
-            standard_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"));
-            standard_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"New Info"));
-            standard_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TOKEN123"));
-            standard_cmtat::set_document_uri(&admin_cap, &mut registry, string::utf8(b"https://example.com"));
+            standard_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"New Terms"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"New Info"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TOKEN123"), ctx);
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::set_document_uri(&admin_cap, &mut registry, string::utf8(b"https://example.com"), ctx);
 
             assert!(standard_cmtat::document_uri(&registry) == string::utf8(b"https://example.com"), 0);
             assert!(standard_cmtat::terms(&registry) == string::utf8(b"New Terms"), 1);
