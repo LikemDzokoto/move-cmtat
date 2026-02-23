@@ -267,7 +267,6 @@ module move_cmtat::light_cmtat {
 
     // ========== MINTING FUNCTIONS ==========
     public fun mint(
-        _minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -291,7 +290,6 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun mint_and_transfer(
-        _minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -299,12 +297,11 @@ module move_cmtat::light_cmtat {
         amount: u64,
         ctx: &mut tx_context::TxContext
     ) {
-        let coins = mint(_minter_cap, treasury_cap, registry, deny_list, to, amount, ctx);
+        let coins = mint(treasury_cap, registry, deny_list, to, amount, ctx);
         transfer::public_transfer(coins, to);
     }
 
     public entry fun batch_mint(
-        minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -320,7 +317,7 @@ module move_cmtat::light_cmtat {
             let recipient = *vector::borrow(&recipients, i);
             let amount = *vector::borrow(&amounts, i);
 
-            let coins = mint(minter_cap, treasury_cap, registry, deny_list, recipient, amount, ctx);
+            let coins = mint(treasury_cap, registry, deny_list, recipient, amount, ctx);
             transfer::public_transfer(coins, recipient);
 
             i = i + 1;
@@ -391,7 +388,6 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun burn_and_mint(
-        _minter_cap: &MinterCap,
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -438,7 +434,6 @@ module move_cmtat::light_cmtat {
 
     // ========== FREEZE FUNCTIONS ==========
     public entry fun set_address_frozen(
-        _enforcer_cap: &EnforcerCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         account: address,
@@ -457,7 +452,6 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun batch_set_address_frozen(
-        enforcer_cap: &EnforcerCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         accounts: vector<address>,
@@ -472,7 +466,7 @@ module move_cmtat::light_cmtat {
             let account = *vector::borrow(&accounts, i);
             let status = *vector::borrow(&statuses, i);
 
-            set_address_frozen(enforcer_cap, deny_list, deny_cap, account, status, ctx);
+            set_address_frozen(deny_list, deny_cap, account, status, ctx);
 
             i = i + 1;
         }
@@ -480,7 +474,6 @@ module move_cmtat::light_cmtat {
 
     // ========== PAUSE FUNCTIONS ==========
     public entry fun pause(
-        _pauser_cap: &PauserCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
@@ -496,7 +489,6 @@ module move_cmtat::light_cmtat {
     }
 
     public entry fun unpause(
-        _pauser_cap: &PauserCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,

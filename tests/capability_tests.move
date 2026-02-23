@@ -218,7 +218,7 @@ module move_cmtat::capability_tests {
             let deny_list = test_scenario::take_shared<DenyList>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER2, 1000, ctx);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, USER2, 1000, ctx);
             assert!(coin::value(&coins) == 1000, 0);
 
             transfer::public_transfer(coins, USER2);
@@ -259,7 +259,7 @@ module move_cmtat::capability_tests {
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            light_cmtat::pause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pauser_cap);
             test_scenario::return_shared(deny_list);
@@ -603,7 +603,7 @@ module move_cmtat::capability_tests {
             let deny_list = test_scenario::take_shared<DenyList>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            let coins = standard_cmtat::mint(&mint_cap, &mut treasury_cap, &registry, &deny_list, USER2, 1000, ctx);
+            let coins = standard_cmtat::mint(&mut treasury_cap, &registry, &deny_list, USER2, 1000, ctx);
             assert!(coin::value(&coins) == 1000, 0);
 
             transfer::public_transfer(coins, USER2);
@@ -667,7 +667,7 @@ module move_cmtat::capability_tests {
             let registry = test_scenario::take_shared<StandardRegistry>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            standard_cmtat::pause(&pause_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            standard_cmtat::pause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pause_cap);
             test_scenario::return_shared(deny_list);
@@ -703,7 +703,7 @@ module move_cmtat::capability_tests {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<STANDARD_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            standard_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER2, true, ctx);
+            standard_cmtat::set_address_frozen(&mut deny_list, &mut deny_cap, USER2, true, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_shared(deny_list);
@@ -923,7 +923,7 @@ module move_cmtat::capability_tests {
             let compliance_state = test_scenario::take_shared<DebtComplianceState>(scenario);
             let deny_list = test_scenario::take_shared<DenyList>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            let coins = debt_cmtat::mint(&mint_cap, &mut treasury_cap, &registry, &compliance_state, &deny_list, USER2, 1000, ctx);
+            let coins = debt_cmtat::mint(&mut treasury_cap, &registry, &compliance_state, &deny_list, USER2, 1000, ctx);
             assert!(coin::value(&coins) == 1000, 0);
             transfer::public_transfer(coins, USER2);
             test_scenario::return_to_sender(scenario, mint_cap);

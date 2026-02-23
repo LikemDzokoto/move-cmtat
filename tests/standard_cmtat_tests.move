@@ -119,11 +119,10 @@ module move_cmtat::standard_cmtat_tests {
         {
             let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
-            let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            standard_cmtat::mint_and_transfer(&mint_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
+            standard_cmtat::mint_and_transfer(&mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
 
             // Check total supply increased
             assert!(standard_cmtat::total_supply(&treasury_cap) == 5000, 0);
@@ -131,7 +130,6 @@ module move_cmtat::standard_cmtat_tests {
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
             test_scenario::return_to_sender(scenario, treasury_cap);
-            test_scenario::return_to_sender(scenario, mint_cap);
         };
 
         // Check USER1 received coins

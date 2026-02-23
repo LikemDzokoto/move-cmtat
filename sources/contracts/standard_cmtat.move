@@ -316,7 +316,6 @@ module move_cmtat::standard_cmtat {
 
     // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
     public fun mint(
-        _mint_cap: &MintCap,
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -340,7 +339,6 @@ module move_cmtat::standard_cmtat {
     }
 
     public entry fun mint_and_transfer(
-        mint_cap: &MintCap,
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -348,7 +346,7 @@ module move_cmtat::standard_cmtat {
         amount: u64,
         ctx: &mut tx_context::TxContext
     ) {
-        let coins = mint(mint_cap, treasury_cap, registry, deny_list, to, amount, ctx);
+        let coins = mint(treasury_cap, registry, deny_list, to, amount, ctx);
         transfer::public_transfer(coins, to);
     }
 
@@ -382,7 +380,6 @@ module move_cmtat::standard_cmtat {
 
     // ========== PAUSE FUNCTIONS (Native DenyList) ==========
     public entry fun pause(
-        _pause_cap: &PauseCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
@@ -397,7 +394,6 @@ module move_cmtat::standard_cmtat {
     }
 
     public entry fun unpause(
-        _pause_cap: &PauseCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
@@ -428,7 +424,6 @@ module move_cmtat::standard_cmtat {
 
     // ========== FREEZE FUNCTIONS (Native DenyList) ==========
     public entry fun set_address_frozen(
-        _enforcer_cap: &EnforcerCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         account: address,
@@ -447,7 +442,6 @@ module move_cmtat::standard_cmtat {
     }
 
     public entry fun batch_set_address_frozen(
-        enforcer_cap: &EnforcerCap,
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
         accounts: vector<address>,
@@ -462,7 +456,7 @@ module move_cmtat::standard_cmtat {
             let account = *vector::borrow(&accounts, i);
             let status = *vector::borrow(&statuses, i);
 
-            set_address_frozen(enforcer_cap, deny_list, deny_cap, account, status, ctx);
+            set_address_frozen(deny_list, deny_cap, account, status, ctx);
 
             i = i + 1;
         }

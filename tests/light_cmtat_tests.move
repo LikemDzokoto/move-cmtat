@@ -119,7 +119,7 @@ module move_cmtat::light_cmtat_tests_new {
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, USER1, 5000, ctx);
 
             assert!(coin::value(&coins) == 5000, 0);
             assert!(light_cmtat::total_supply(&treasury_cap) == 5000, 1);
@@ -154,15 +154,13 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
-            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::mint_and_transfer(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 3000, ctx);
+            light_cmtat::mint_and_transfer(&mut treasury_cap, &registry, &deny_list, USER1, 3000, ctx);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
-            test_scenario::return_to_sender(scenario, minter_cap);
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
         };
@@ -188,7 +186,6 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::next_tx(scenario, ADMIN);
         {
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
-            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
             let deny_list = take_deny_list(scenario);
 
@@ -196,12 +193,11 @@ module move_cmtat::light_cmtat_tests_new {
             let amounts = vector[1000, 2000];
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::batch_mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, recipients, amounts, ctx);
+            light_cmtat::batch_mint(&mut treasury_cap, &registry, &deny_list, recipients, amounts, ctx);
 
             assert!(light_cmtat::total_supply(&treasury_cap) == 3000, 0);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
-            test_scenario::return_to_sender(scenario, minter_cap);
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
         };
@@ -226,7 +222,7 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            light_cmtat::pause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pauser_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
@@ -243,7 +239,7 @@ module move_cmtat::light_cmtat_tests_new {
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
             public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
@@ -271,7 +267,7 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+            light_cmtat::set_address_frozen(&mut deny_list, &mut deny_cap, USER1, true, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
@@ -287,7 +283,7 @@ module move_cmtat::light_cmtat_tests_new {
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
             public_transfer(coins, USER1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
@@ -316,7 +312,7 @@ module move_cmtat::light_cmtat_tests_new {
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
 
             assert!(light_cmtat::total_supply(&treasury_cap) == 5000, 0);
 
@@ -348,12 +344,12 @@ module move_cmtat::light_cmtat_tests_new {
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            let burn_coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 3000, ctx);
+            let burn_coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, ADMIN, 3000, ctx);
 
             assert!(light_cmtat::total_supply(&treasury_cap) == 3000, 0);
 
             // Burn and mint
-            light_cmtat::burn_and_mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, burn_coins, USER1, 1500, ctx);
+            light_cmtat::burn_and_mint(&mut treasury_cap, &registry, &deny_list, burn_coins, USER1, 1500, ctx);
             assert!(light_cmtat::total_supply(&treasury_cap) == 1500, 1);
 
             test_scenario::return_to_sender(scenario, treasury_cap);
@@ -382,7 +378,7 @@ module move_cmtat::light_cmtat_tests_new {
             let deny_list = take_deny_list(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            let coins = light_cmtat::mint(&minter_cap, &mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, ADMIN, 5000, ctx);
 
             // Transfer to USER1
             light_cmtat::transfer(&registry, &deny_list, coins, USER1, ctx);
@@ -421,7 +417,7 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+            light_cmtat::set_address_frozen(&mut deny_list, &mut deny_cap, USER1, true, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
@@ -451,7 +447,7 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, false, ctx);
+            light_cmtat::set_address_frozen(&mut deny_list, &mut deny_cap, USER1, false, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
@@ -488,7 +484,7 @@ module move_cmtat::light_cmtat_tests_new {
             let statuses = vector[true, true];
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::batch_set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, accounts, statuses, ctx);
+            light_cmtat::batch_set_address_frozen(&mut deny_list, &mut deny_cap, accounts, statuses, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
@@ -535,7 +531,7 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::pause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            light_cmtat::pause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pauser_cap);
             test_scenario::return_to_sender(scenario, deny_cap);
@@ -561,7 +557,7 @@ module move_cmtat::light_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<LIGHT_CMTAT>>(scenario);
 
             let ctx = test_scenario::ctx(scenario);
-            light_cmtat::unpause(&pauser_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            light_cmtat::unpause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pauser_cap);
             test_scenario::return_to_sender(scenario, deny_cap);

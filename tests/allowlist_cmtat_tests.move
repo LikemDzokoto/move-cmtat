@@ -5,7 +5,6 @@ module move_cmtat::allowlist_cmtat_tests_new {
     use iota::test_scenario::{Self};
     use iota::coin::{Self, DenyCapV1, TreasuryCap};
     use iota::deny_list::{Self, DenyList};
-    use iota::transfer;
 
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry, AllowlistCMTATState, ComplianceState,
                                        AdminCap, AllowlistCap, SnapshotCap, MintCap, BurnCap, PauseCap, EnforcerCap};
@@ -397,7 +396,6 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let ctx = test_scenario::ctx(scenario);
 
             let coins = allowlist_cmtat::mint(
-                &minter_cap,
                 &mut treasury_cap,
                 &registry,
                 &compliance_state,
@@ -449,7 +447,6 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let ctx = test_scenario::ctx(scenario);
 
             let coins = allowlist_cmtat::mint(
-                &minter_cap,
                 &mut treasury_cap,
                 &registry,
                 &compliance_state,
@@ -503,7 +500,6 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let ctx = test_scenario::ctx(scenario);
 
             let coins = allowlist_cmtat::mint(
-                &minter_cap,
                 &mut treasury_cap,
                 &registry,
                 &compliance_state,
@@ -540,7 +536,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            allowlist_cmtat::pause(&pause_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            allowlist_cmtat::pause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pause_cap);
             test_scenario::return_shared(deny_list);
@@ -556,7 +552,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            allowlist_cmtat::unpause(&pause_cap, &mut deny_list, &mut deny_cap, &registry, ctx);
+            allowlist_cmtat::unpause(&mut deny_list, &mut deny_cap, &registry, ctx);
 
             test_scenario::return_to_sender(scenario, pause_cap);
             test_scenario::return_shared(deny_list);
@@ -581,7 +577,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            allowlist_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, true, ctx);
+            allowlist_cmtat::set_address_frozen(&mut deny_list, &mut deny_cap, USER1, true, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_shared(deny_list);
@@ -595,7 +591,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<ALLOWLIST_CMTAT>>(scenario);
             let ctx = test_scenario::ctx(scenario);
 
-            allowlist_cmtat::set_address_frozen(&enforcer_cap, &mut deny_list, &mut deny_cap, USER1, false, ctx);
+            allowlist_cmtat::set_address_frozen(&mut deny_list, &mut deny_cap, USER1, false, ctx);
 
             test_scenario::return_to_sender(scenario, enforcer_cap);
             test_scenario::return_shared(deny_list);
