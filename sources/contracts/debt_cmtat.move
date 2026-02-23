@@ -11,6 +11,7 @@ module move_cmtat::debt_cmtat {
 
     use move_cmtat::debt;
     use move_cmtat::snapshot_engine;
+    use move_cmtat::rule_engine_v2;
 
 
     public struct DEBT_CMTAT has drop {}
@@ -29,6 +30,8 @@ module move_cmtat::debt_cmtat {
     public struct DebtCMTATState has key {
         id: object::UID,
         snapshot_engine: snapshot_engine::SnapshotEngine,
+        rule_engine: rule_engine_v2::RuleEngine,
+        rule_engine_active: bool,
     }
 
 
@@ -118,11 +121,21 @@ module move_cmtat::debt_cmtat {
         engine: address,
     }
 
+    public struct RuleEngineRemoved has copy, drop {
+        admin: address,
+    }
+
+    public struct RuleEngineRestored has copy, drop {
+        admin: address,
+    }
+
     // ========== ERRORS ==========
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
     const EDebtInDefault: u64 = 4;
+    const ERuleEngineNotActive: u64 = 5;
+    const ERuleEngineAlreadyActive: u64 = 6;
 
 
     fun init(witness: DEBT_CMTAT, ctx: &mut tx_context::TxContext) {
@@ -148,10 +161,16 @@ module move_cmtat::debt_cmtat {
             deactivated: false,
         };
 
-        // state with snapshot engine
+        // state with snapshot engine and rule engine
         let state = DebtCMTATState {
             id: object::new(ctx),
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
+            rule_engine: {
+                let mut re = rule_engine_v2::init_rule_engine_v2(ctx);
+                rule_engine_v2::add_rule(&mut re, rule_engine_v2::rule_whitelist(), ctx);
+                re
+            },
+            rule_engine_active: true,
         };
 
         //  compliance state with debt state only
@@ -460,12 +479,27 @@ module move_cmtat::debt_cmtat {
     public entry fun mint_and_transfer(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         registry: &CMTATRegistry,
+        state: &mut DebtCMTATState,
         compliance_state: &ComplianceState,
         deny_list: &deny_list::DenyList,
+        clock: &Clock,
         to: address,
         amount: u64,
         ctx: &mut tx_context::TxContext
     ) {
+        // RuleEngine validation for mint (if active)
+        if (state.rule_engine_active) {
+            let is_to_vip = rule_engine_v2::is_vip(&state.rule_engine, to);
+            rule_engine_v2::require_valid_transfer(
+                &state.rule_engine,
+                tx_context::sender(ctx),
+                to,
+                amount,
+                clock,
+                is_to_vip
+            );
+        };
+
         let coins = mint(treasury_cap, registry, compliance_state, deny_list, to, amount, ctx);
         transfer::public_transfer(coins, to);
     }
@@ -596,11 +630,143 @@ module move_cmtat::debt_cmtat {
         snapshot_engine::create_snapshot(&mut state.snapshot_engine, total_supply, timestamp, ctx);
     }
 
+    // ========== RULE ENGINE MANAGEMENT ==========
+    public fun rule_engine_active(state: &DebtCMTATState): bool {
+        state.rule_engine_active
+    }
+
+    public fun is_vip(state: &DebtCMTATState, account: address): bool {
+        rule_engine_v2::is_vip(&state.rule_engine, account)
+    }
+
+    public fun is_rule_enabled(state: &DebtCMTATState, rule_type: u8): bool {
+        rule_engine_v2::is_rule_enabled(&state.rule_engine, rule_type)
+    }
+
+    public entry fun add_rule(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        rule_type: u8,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::add_rule(&mut state.rule_engine, rule_type, ctx);
+    }
+
+    public entry fun remove_rule(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        rule_type: u8,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::remove_rule(&mut state.rule_engine, rule_type, ctx);
+    }
+
+    public entry fun add_vip(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        account: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::add_vip(&mut state.rule_engine, account, ctx);
+    }
+
+    public entry fun remove_vip(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        account: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::remove_vip(&mut state.rule_engine, account, ctx);
+    }
+
+    public entry fun set_auto_approval(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        enabled: bool,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::set_auto_approval(&mut state.rule_engine, enabled, ctx);
+    }
+
+    public entry fun set_time_limits(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        approval_deadline_ms: u64,
+        execution_deadline_ms: u64,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::set_time_limits(&mut state.rule_engine, approval_deadline_ms, execution_deadline_ms, ctx);
+    }
+
+    // ========== TRANSFER REQUEST MANAGEMENT ==========
+    public entry fun create_transfer_request(
+        state: &mut DebtCMTATState,
+        clock: &Clock,
+        to: address,
+        value: u64,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::create_transfer_request(&mut state.rule_engine, to, value, clock, ctx);
+    }
+
+    public entry fun approve_transfer_request(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        from: address,
+        to: address,
+        value: u64,
+        clock: &Clock,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::approve_request(&mut state.rule_engine, from, to, value, clock, ctx);
+    }
+
+    public entry fun deny_transfer_request(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        from: address,
+        to: address,
+        value: u64,
+        reason: String,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::deny_request(&mut state.rule_engine, from, to, value, reason, ctx);
+    }
+
+    // ========== RULE ENGINE REMOVAL/RESTORATION ==========
+    public entry fun remove_rule_engine(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        ctx: &mut tx_context::TxContext
+    ) {
+        assert!(state.rule_engine_active, ERuleEngineNotActive);
+        state.rule_engine_active = false;
+
+        event::emit(RuleEngineRemoved {
+            admin: tx_context::sender(ctx),
+        });
+    }
+
+    public entry fun restore_rule_engine(
+        _admin_cap: &AdminCap,
+        state: &mut DebtCMTATState,
+        ctx: &mut tx_context::TxContext
+    ) {
+        assert!(!state.rule_engine_active, ERuleEngineAlreadyActive);
+        state.rule_engine_active = true;
+
+        event::emit(RuleEngineRestored {
+            admin: tx_context::sender(ctx),
+        });
+    }
+
     // ========== TRANSFER FUNCTIONS WITH VALIDATION ==========
     public entry fun transfer(
         registry: &CMTATRegistry,
+        state: &mut DebtCMTATState,
         compliance_state: &ComplianceState,
         deny_list: &deny_list::DenyList,
+        clock: &Clock,
         coins: Coin<DEBT_CMTAT>,
         to: address,
         ctx: &tx_context::TxContext
@@ -617,6 +783,21 @@ module move_cmtat::debt_cmtat {
         assert!(!is_paused(deny_list, ctx), EModulePaused);
         assert!(!is_frozen(deny_list, from, ctx), EAddressFrozen);
         assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
+
+        // RuleEngine validation (if active)
+        if (state.rule_engine_active) {
+            let is_from_vip = rule_engine_v2::is_vip(&state.rule_engine, from);
+            let is_to_vip = rule_engine_v2::is_vip(&state.rule_engine, to);
+            
+            rule_engine_v2::require_valid_transfer(
+                &state.rule_engine,
+                from,
+                to,
+                coin::value(&coins),
+                clock,
+                is_from_vip && is_to_vip
+            );
+        };
 
         // Transfer the coins
         transfer::public_transfer(coins, to);

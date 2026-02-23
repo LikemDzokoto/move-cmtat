@@ -391,7 +391,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let deny_list = take_deny_list(scenario);
             let ctx = test_scenario::ctx(scenario);
 
@@ -442,7 +442,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let deny_list = take_deny_list(scenario);
             let ctx = test_scenario::ctx(scenario);
 
@@ -495,7 +495,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
             let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
             let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
-            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
             let deny_list = take_deny_list(scenario);
             let ctx = test_scenario::ctx(scenario);
 

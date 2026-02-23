@@ -1,4 +1,5 @@
 #[test_only]
+#[allow(unused_use)]
 module move_cmtat::capability_tests {
     use std::string;
     use iota::test_scenario::{Self};
