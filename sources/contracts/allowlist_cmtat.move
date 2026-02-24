@@ -113,6 +113,10 @@ module move_cmtat::allowlist_cmtat {
         status: bool,
     }
 
+    public struct AllowlistCleared has copy, drop {
+        allowlist_manager: address,
+    }
+
     public struct RuleEngineRemoved has copy, drop {
         admin: address,
     }
@@ -623,6 +627,66 @@ module move_cmtat::allowlist_cmtat {
             });
             i = i + 1;
         };
+    }
+
+    // ========== ALLOWLIST REMOVAL FUNCTIONS ==========
+
+    public fun get_allowlist_count(
+        _allowlist_cap: &AllowlistCap,
+        compliance_state: &ComplianceState,
+    ): u64 {
+        allowlist::get_count(&compliance_state.allowlist_state)
+    }
+
+    public entry fun remove_from_allowlist(
+        _allowlist_cap: &AllowlistCap,
+        compliance_state: &mut ComplianceState,
+        account: address,
+        ctx: &mut TxContext
+    ) {
+        allowlist::remove_address(&mut compliance_state.allowlist_state, account);
+        
+        event::emit(AddressAllowlistedUpdated {
+            allowlist_manager: tx_context::sender(ctx),
+            account,
+            status: false,
+        });
+    }
+
+    public entry fun batch_remove_from_allowlist(
+        _allowlist_cap: &AllowlistCap,
+        compliance_state: &mut ComplianceState,
+        accounts: vector<address>,
+        ctx: &mut TxContext
+    ) {
+        let sender = tx_context::sender(ctx);
+        allowlist::batch_remove_addresses(&mut compliance_state.allowlist_state, accounts);
+        
+        let len = vector::length(&accounts);
+        let mut i = 0;
+        while (i < len) {
+            let account = *vector::borrow(&accounts, i);
+            event::emit(AddressAllowlistedUpdated {
+                allowlist_manager: sender,
+                account,
+                status: false,
+            });
+            i = i + 1;
+        };
+    }
+
+    public entry fun clear_allowlist(
+        _allowlist_cap: &AllowlistCap,
+        compliance_state: &mut ComplianceState,
+        accounts: vector<address>,
+        ctx: &mut TxContext
+    ) {
+        let sender = tx_context::sender(ctx);
+        allowlist::clear_all(&mut compliance_state.allowlist_state, accounts);
+        
+        event::emit(AllowlistCleared {
+            allowlist_manager: sender,
+        });
     }
 
     // ========== SNAPSHOT FUNCTIONS ==========

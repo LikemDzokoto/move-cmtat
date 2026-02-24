@@ -12,6 +12,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
     const ADMIN: address = @0xAD;
     const USER1: address = @0x1;
     const USER2: address = @0x2;
+    const USER3: address = @0x3;
 
     // Helper to create DenyList and initialize token
     fun setup(scenario: &mut test_scenario::Scenario) {
@@ -105,6 +106,150 @@ module move_cmtat::allowlist_cmtat_tests_new {
             allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, false, ctx);
             assert!(!allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 2);
 
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_allowlist_count() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 0, 0);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, true, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 1, 1);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 2, 2);
+            
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_remove_from_allowlist() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, true, ctx);
+            
+            assert!(allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 0);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::remove_from_allowlist(&allowlist_cap, &mut compliance_state, USER1, ctx);
+            
+            assert!(!allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 1);
+            
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_batch_remove_from_allowlist() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER3, true, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 3, 0);
+            
+            let accounts = vector[USER1, USER2];
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::batch_remove_from_allowlist(&allowlist_cap, &mut compliance_state, accounts, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 1, 1);
+            assert!(!allowlist_cmtat::is_allowlisted(&compliance_state, USER1), 2);
+            assert!(!allowlist_cmtat::is_allowlisted(&compliance_state, USER2), 3);
+            assert!(allowlist_cmtat::is_allowlisted(&compliance_state, USER3), 4);
+            
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_clear_allowlist() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER1, true, ctx);
+            
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 2, 0);
+            
+            let accounts = vector[USER1, USER2];
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::clear_allowlist(&allowlist_cap, &mut compliance_state, accounts, ctx);
+            
+            assert!(allowlist_cmtat::get_allowlist_count(&allowlist_cap, &compliance_state) == 0, 1);
+            
             test_scenario::return_shared(compliance_state);
             test_scenario::return_to_sender(scenario, allowlist_cap);
         };
