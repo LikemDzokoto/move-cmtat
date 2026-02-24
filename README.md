@@ -2,7 +2,7 @@
 
 > A native IOTA Move implementation of Switzerland's Capital Markets Technology Association token standard
 
-**⚠️ WORK IN PROGRESS - 68% CMTAT Compliant**
+**⚠️ WORK IN PROGRESS - ~72% CMTAT Compliant**
 
 This project implements the CMTAT security token standard natively in IOTA Move, leveraging IOTA's object model and native token architecture for superior security and compliance capabilities.
 
@@ -165,7 +165,13 @@ move-cmtat/
     ├── snapshot_engine_tests.move
     ├── interest_engine_tests.move
     ├── debt_engine_tests.move
-    └── bond_validation_tests.move
+    ├── bond_validation_tests.move
+    ├── light_cmtat_tests.move       # Contract unit tests
+    ├── allowlist_cmtat_tests.move   # Contract unit tests
+    ├── standard_cmtat_tests.move    # Contract unit tests
+    ├── debt_cmtat_tests.move        # Contract unit tests
+    ├── capability_tests.move        # Role/capability tests
+    └── integration_tests.move       # Cross-contract flow tests
 ```
 
 **Design Philosophy:**
@@ -331,7 +337,21 @@ iota move test --filter rule_engine_v2
 iota move test --filter snapshot_engine
 ```
 
-**Test Status:** 96% coverage (125/130 tests passing)
+**Test Status:** 130+ tests including 5 integration tests
+
+### Integration Tests
+
+Cross-contract flow tests verifying end-to-end scenarios:
+
+| Test | Flow Description |
+|------|------------------|
+| `test_token_lifecycle` | init → mint → transfer |
+| `test_allowlist_full_flow` | enable allowlist → add addresses → transfer → disable |
+| `test_freeze_pause_flow` | freeze address → unfreeze |
+| `test_deactivation_flow` | init → mint → deactivate |
+| `test_role_escalation_flow` | grant minter → grant pauser → test capabilities |
+
+Run with: `iota move test --filter integration`
 
 ### Known Limitations
 
@@ -342,7 +362,7 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 
 ## CMTAT Compliance
 
-### Current Compliance: 68%
+### Current Compliance: ~72%
 
 **Fully Compliant Areas:**
 - Core token functionality (via native Coin<T>)
@@ -426,4 +446,4 @@ Mozilla Public License 2.0 (MPL-2.0)
 
 *Built with IOTA Move native architecture for compliant securities*
 
-*Version 0.2.0 - Work in Progress (68% CMTAT Compliant)*
+*Version 0.2.0 - Work in Progress (~72% CMTAT Compliant)*
