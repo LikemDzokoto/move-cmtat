@@ -336,4 +336,59 @@ module move_cmtat::standard_cmtat_tests {
 
         test_scenario::end(scenario_val);
     }
+
+    #[test]
+    fun test_schedule_snapshot() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut state = test_scenario::take_shared<StandardCMTATState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let clock = take_clock(scenario);
+            let snapshot_cap = test_scenario::take_from_sender<SnapshotCap>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::mint_and_transfer(
+                &mut treasury_cap,
+                &registry,
+                &mut state,
+                &deny_list,
+                &clock,
+                ADMIN,
+                1000,
+                ctx
+            );
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, snapshot_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let mut state = test_scenario::take_shared<StandardCMTATState>(scenario);
+            let clock = take_clock(scenario);
+            let snapshot_cap = test_scenario::take_from_sender<SnapshotCap>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::schedule_snapshot(&snapshot_cap, &mut state, &treasury_cap, &clock, ctx);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, snapshot_cap);
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
 }

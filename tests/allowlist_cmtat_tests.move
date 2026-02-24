@@ -5,6 +5,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
     use iota::test_scenario::{Self};
     use iota::coin::{Self, DenyCapV1, TreasuryCap};
     use iota::deny_list::{Self, DenyList};
+    use iota::clock::{Self, Clock};
 
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry, AllowlistCMTATState, ComplianceState,
                                        AdminCap, AllowlistCap, SnapshotCap, MintCap, BurnCap, PauseCap, EnforcerCap};
@@ -21,6 +22,29 @@ module move_cmtat::allowlist_cmtat_tests_new {
         {
             let ctx = test_scenario::ctx(scenario);
             deny_list::create_for_test(ctx);
+        };
+        // Initialize token as ADMIN
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::init_for_testing(ctx);
+        };
+    }
+
+    // Helper with Clock
+    fun setup_with_clock(scenario: &mut test_scenario::Scenario) {
+        // Create DenyList as system address @0x0
+        test_scenario::next_tx(scenario, @0x0);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            deny_list::create_for_test(ctx);
+        };
+        // Create Clock as system address @0x0
+        test_scenario::next_tx(scenario, @0x0);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let clock = clock::create_for_testing(ctx);
+            clock::share_for_testing(clock);
         };
         // Initialize token as ADMIN
         test_scenario::next_tx(scenario, ADMIN);
@@ -798,6 +822,46 @@ module move_cmtat::allowlist_cmtat_tests_new {
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
             test_scenario::return_to_sender(scenario, deny_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_restore_rule_engine() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup_with_clock(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<AllowlistCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+
+            assert!(allowlist_cmtat::rule_engine_active(&state) == true, 0);
+
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::remove_rule_engine(&admin_cap, &mut state, ctx);
+
+            assert!(allowlist_cmtat::rule_engine_active(&state) == false, 1);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<AllowlistCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::restore_rule_engine(&admin_cap, &mut state, ctx);
+
+            assert!(allowlist_cmtat::rule_engine_active(&state) == true, 2);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
         };
 
         test_scenario::end(scenario_val);

@@ -558,60 +558,6 @@ module move_cmtat::standard_cmtat {
         rule_engine_v2::remove_vip(&mut state.rule_engine, account, ctx);
     }
 
-    public entry fun set_auto_approval(
-        _admin_cap: &AdminCap,
-        state: &mut StandardCMTATState,
-        enabled: bool,
-        ctx: &mut tx_context::TxContext
-    ) {
-        rule_engine_v2::set_auto_approval(&mut state.rule_engine, enabled, ctx);
-    }
-
-    public entry fun set_time_limits(
-        _admin_cap: &AdminCap,
-        state: &mut StandardCMTATState,
-        approval_deadline_ms: u64,
-        execution_deadline_ms: u64,
-        ctx: &mut tx_context::TxContext
-    ) {
-        rule_engine_v2::set_time_limits(&mut state.rule_engine, approval_deadline_ms, execution_deadline_ms, ctx);
-    }
-
-    // ========== TRANSFER REQUEST MANAGEMENT ==========
-    public entry fun create_transfer_request(
-        state: &mut StandardCMTATState,
-        clock: &Clock,
-        to: address,
-        value: u64,
-        ctx: &mut tx_context::TxContext
-    ) {
-        rule_engine_v2::create_transfer_request(&mut state.rule_engine, to, value, clock, ctx);
-    }
-
-    public entry fun approve_transfer_request(
-        _admin_cap: &AdminCap,
-        state: &mut StandardCMTATState,
-        from: address,
-        to: address,
-        value: u64,
-        clock: &Clock,
-        ctx: &mut tx_context::TxContext
-    ) {
-        rule_engine_v2::approve_request(&mut state.rule_engine, from, to, value, clock, ctx);
-    }
-
-    public entry fun deny_transfer_request(
-        _admin_cap: &AdminCap,
-        state: &mut StandardCMTATState,
-        from: address,
-        to: address,
-        value: u64,
-        reason: String,
-        ctx: &mut tx_context::TxContext
-    ) {
-        rule_engine_v2::deny_request(&mut state.rule_engine, from, to, value, reason, ctx);
-    }
-
     // ========== RULE ENGINE REMOVAL/RESTORATION ==========
     public entry fun remove_rule_engine(
         _admin_cap: &AdminCap,

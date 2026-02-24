@@ -361,6 +361,55 @@ module move_cmtat::light_cmtat_tests_new {
         test_scenario::end(scenario_val);
     }
 
+    #[test]
+    fun test_burn_from() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = take_deny_list(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            let coins = light_cmtat::mint(&mut treasury_cap, &registry, &deny_list, USER1, 1000, ctx);
+            
+            transfer::public_transfer(coins, USER1);
+
+            assert!(light_cmtat::total_supply(&treasury_cap) == 1000, 0);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<LIGHT_CMTAT>>(scenario);
+            let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
+            let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let coins = test_scenario::take_from_sender<coin::Coin<LIGHT_CMTAT>>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            light_cmtat::burn_from(&minter_cap, &mut treasury_cap, &registry, coins, ctx);
+            
+            assert!(light_cmtat::total_supply(&treasury_cap) == 0, 1);
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
     // ========== TRANSFER TESTS ==========
 
     #[test]
