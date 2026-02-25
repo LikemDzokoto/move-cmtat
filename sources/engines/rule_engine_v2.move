@@ -565,7 +565,7 @@ module move_cmtat::rule_engine_v2 {
         value: u64,
         clock: &Clock,
         is_allowlisted: bool,
-        from_balance: u64
+        _from_balance: u64
     ): u8 {
         let now = clock.timestamp_ms();
 

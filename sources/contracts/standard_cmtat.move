@@ -138,7 +138,7 @@ module move_cmtat::standard_cmtat {
         };
 
         // Create state with engines
-        let mut rule_engine = rule_engine_v2::init_rule_engine_v2(ctx);
+        let rule_engine = rule_engine_v2::init_rule_engine_v2(ctx);
         
         let state = StandardCMTATState {
             id: object::new(ctx),

@@ -5,7 +5,7 @@ module move_cmtat::allowlist_cmtat_tests_new {
     use iota::test_scenario::{Self};
     use iota::coin::{Self, DenyCapV1, TreasuryCap};
     use iota::deny_list::{Self, DenyList};
-    use iota::clock::{Self, Clock};
+    use iota::clock;
 
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry, AllowlistCMTATState, ComplianceState,
                                        AdminCap, AllowlistCap, SnapshotCap, MintCap, BurnCap, PauseCap, EnforcerCap};

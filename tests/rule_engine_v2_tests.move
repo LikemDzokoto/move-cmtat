@@ -454,9 +454,8 @@ module move_cmtat::rule_engine_v2_tests {
 
         test_scenario::next_tx(scenario, USER1);
         {
-            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
-            let ctx = test_scenario::ctx(scenario);
 
             let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
