@@ -140,9 +140,6 @@ module move_cmtat::standard_cmtat {
         // Create state with engines
         let mut rule_engine = rule_engine_v2::init_rule_engine_v2(ctx);
         
-        // Enable whitelist rule by default (ConditionalTransfer disabled)
-        rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_whitelist(), ctx);
-        
         let state = StandardCMTATState {
             id: object::new(ctx),
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
@@ -376,7 +373,8 @@ module move_cmtat::standard_cmtat {
                 to,
                 amount,
                 clock,
-                is_to_vip
+                is_to_vip,
+                0 // No balance check for mint
             );
         };
 
@@ -558,6 +556,72 @@ module move_cmtat::standard_cmtat {
         rule_engine_v2::remove_vip(&mut state.rule_engine, account, ctx);
     }
 
+    public entry fun set_auto_approval(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        enabled: bool,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::set_auto_approval(&mut state.rule_engine, enabled, ctx);
+    }
+
+    public entry fun set_time_limits(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        approval_deadline_ms: u64,
+        execution_deadline_ms: u64,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::set_time_limits(&mut state.rule_engine, approval_deadline_ms, execution_deadline_ms, ctx);
+    }
+
+    // ========== RULE MANAGEMENT ==========
+
+    public entry fun add_to_blacklist(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        account: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::add_to_blacklist(&mut state.rule_engine, account, ctx);
+    }
+
+    public entry fun remove_from_blacklist(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        account: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::remove_from_blacklist(&mut state.rule_engine, account, ctx);
+    }
+
+    public entry fun add_to_sanction_list(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        account: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::add_to_sanction_list(&mut state.rule_engine, account, ctx);
+    }
+
+    public entry fun remove_from_sanction_list(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        account: address,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::remove_from_sanction_list(&mut state.rule_engine, account, ctx);
+    }
+
+    public entry fun set_max_balance(
+        _admin_cap: &AdminCap,
+        state: &mut StandardCMTATState,
+        max_balance: u64,
+        ctx: &mut tx_context::TxContext
+    ) {
+        rule_engine_v2::set_max_balance(&mut state.rule_engine, max_balance, ctx);
+    }
+
     // ========== RULE ENGINE REMOVAL/RESTORATION ==========
     public entry fun remove_rule_engine(
         _admin_cap: &AdminCap,
@@ -614,7 +678,8 @@ module move_cmtat::standard_cmtat {
                 to,
                 coin::value(&coins),
                 clock,
-                is_from_vip && is_to_vip  // Both parties need to be allowlisted (VIP)
+                is_from_vip && is_to_vip,  // Both parties need to be allowlisted (VIP)
+                0 // Max balance check deferred
             );
         };
 

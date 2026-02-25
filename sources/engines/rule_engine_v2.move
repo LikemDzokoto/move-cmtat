@@ -28,6 +28,9 @@ module move_cmtat::rule_engine_v2 {
     const CODE_FROZEN_RECEIVER: u8 = 3;
     const CODE_NOT_ALLOWLISTED: u8 = 4;
     const CODE_INSUFFICIENT_BALANCE: u8 = 5;
+    const CODE_BLACKLISTED: u8 = 6;
+    const CODE_SANCTIONED: u8 = 7;
+    const CODE_EXCEEDS_MAX_BALANCE: u8 = 8;
     const CODE_CONDITIONAL_REQUIRED: u8 = 10;
     const CODE_PENDING_APPROVAL: u8 = 11;
     const CODE_REQUEST_DENIED: u8 = 12;
@@ -42,6 +45,7 @@ module move_cmtat::rule_engine_v2 {
     const ERequestExpired: u64 = 604;
     const ENotOperator: u64 = 605;
     const ETransferRestricted: u64 = 607;
+    const EInvalidMaxBalance: u64 = 608;
 
     // ============ DEFAULT TIME LIMITS ============
     const DEFAULT_APPROVAL_DEADLINE_MS: u64 = 90 * 24 * 60 * 60 * 1000;
@@ -53,6 +57,7 @@ module move_cmtat::rule_engine_v2 {
         auto_approval_enabled: bool,
         approval_deadline_ms: u64,
         execution_deadline_ms: u64,
+        max_balance: u64,
     }
 
     public struct TransferRequest has store, drop, copy {
@@ -72,6 +77,8 @@ module move_cmtat::rule_engine_v2 {
         id: object::UID,
         rules: VecMap<u8, bool>,
         vip_list: Table<address, bool>,
+        blacklist: Table<address, bool>,
+        sanction_list: Table<address, bool>,
         transfer_requests: Table<vector<u8>, TransferRequest>,
         request_counter: u64,
         config: TransferConfig,
@@ -98,6 +105,23 @@ module move_cmtat::rule_engine_v2 {
     public struct VipRemoved has copy, drop {
         operator: address,
         account: address,
+    }
+
+    public struct BlacklistUpdated has copy, drop {
+        operator: address,
+        account: address,
+        added: bool,
+    }
+
+    public struct SanctionListUpdated has copy, drop {
+        operator: address,
+        account: address,
+        added: bool,
+    }
+
+    public struct MaxBalanceUpdated has copy, drop {
+        operator: address,
+        max_balance: u64,
     }
 
     public struct RequestCreated has copy, drop {
@@ -146,12 +170,15 @@ module move_cmtat::rule_engine_v2 {
             id: object::new(ctx),
             rules: vec_map::empty(),
             vip_list: table::new(ctx),
+            blacklist: table::new(ctx),
+            sanction_list: table::new(ctx),
             transfer_requests: table::new(ctx),
             request_counter: 0,
             config: TransferConfig {
                 auto_approval_enabled: false,
                 approval_deadline_ms: DEFAULT_APPROVAL_DEADLINE_MS,
                 execution_deadline_ms: DEFAULT_EXECUTION_DEADLINE_MS,
+                max_balance: 0,
             },
             operator: tx_context::sender(ctx),
         };
@@ -171,6 +198,9 @@ module move_cmtat::rule_engine_v2 {
     public fun restriction_code_request_denied(): u8 { CODE_REQUEST_DENIED }
     public fun restriction_code_request_expired(): u8 { CODE_REQUEST_EXPIRED }
     public fun restriction_code_already_executed(): u8 { CODE_ALREADY_EXECUTED }
+    public fun restriction_code_blacklisted(): u8 { CODE_BLACKLISTED }
+    public fun restriction_code_sanctioned(): u8 { CODE_SANCTIONED }
+    public fun restriction_code_exceeds_max_balance(): u8 { CODE_EXCEEDS_MAX_BALANCE }
 
     // ============ MESSAGE FOR RESTRICTION CODE ============
 
@@ -196,7 +226,13 @@ module move_cmtat::rule_engine_v2 {
         } else if (code == CODE_REQUEST_EXPIRED) {
             string::utf8(b"Transfer request has expired")
         } else if (code == CODE_ALREADY_EXECUTED) {
-            string::utf8(b"Transfer request already executed")
+            string::utf8(b"Transfer already executed")
+        } else if (code == CODE_BLACKLISTED) {
+            string::utf8(b"Address is blacklisted")
+        } else if (code == CODE_SANCTIONED) {
+            string::utf8(b"Address is sanctioned")
+        } else if (code == CODE_EXCEEDS_MAX_BALANCE) {
+            string::utf8(b"Transfer exceeds maximum balance limit")
         } else {
             string::utf8(b"Unknown restriction")
         }
@@ -294,6 +330,98 @@ module move_cmtat::rule_engine_v2 {
         };
 
         event::emit(VipRemoved { operator, account });
+    }
+
+    // ============ BLACKLIST FUNCTIONS ============
+
+    public fun is_blacklisted(rule_engine: &RuleEngine, account: address): bool {
+        table::contains(&rule_engine.blacklist, account)
+    }
+
+    public entry fun add_to_blacklist(
+        rule_engine: &mut RuleEngine,
+        account: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (!table::contains(&rule_engine.blacklist, account)) {
+            table::add(&mut rule_engine.blacklist, account, true);
+        };
+
+        event::emit(BlacklistUpdated { operator, account, added: true });
+    }
+
+    public entry fun remove_from_blacklist(
+        rule_engine: &mut RuleEngine,
+        account: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (table::contains(&rule_engine.blacklist, account)) {
+            table::remove(&mut rule_engine.blacklist, account);
+        };
+
+        event::emit(BlacklistUpdated { operator, account, added: false });
+    }
+
+    // ============ SANCTION LIST FUNCTIONS ============
+
+    public fun is_sanctioned(rule_engine: &RuleEngine, account: address): bool {
+        table::contains(&rule_engine.sanction_list, account)
+    }
+
+    public entry fun add_to_sanction_list(
+        rule_engine: &mut RuleEngine,
+        account: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (!table::contains(&rule_engine.sanction_list, account)) {
+            table::add(&mut rule_engine.sanction_list, account, true);
+        };
+
+        event::emit(SanctionListUpdated { operator, account, added: true });
+    }
+
+    public entry fun remove_from_sanction_list(
+        rule_engine: &mut RuleEngine,
+        account: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+
+        if (table::contains(&rule_engine.sanction_list, account)) {
+            table::remove(&mut rule_engine.sanction_list, account);
+        };
+
+        event::emit(SanctionListUpdated { operator, account, added: false });
+    }
+
+    // ============ MAX BALANCE FUNCTIONS ============
+
+    public fun get_max_balance(rule_engine: &RuleEngine): u64 {
+        rule_engine.config.max_balance
+    }
+
+    public entry fun set_max_balance(
+        rule_engine: &mut RuleEngine,
+        max_balance: u64,
+        ctx: &tx_context::TxContext
+    ) {
+        let operator = tx_context::sender(ctx);
+        assert!(operator == rule_engine.operator, ENotOperator);
+        assert!(max_balance >= 0, EInvalidMaxBalance);
+
+        rule_engine.config.max_balance = max_balance;
+
+        event::emit(MaxBalanceUpdated { operator, max_balance });
     }
 
     // ============ TRANSFER REQUEST LIFECYCLE ============
@@ -436,9 +564,30 @@ module move_cmtat::rule_engine_v2 {
         to: address,
         value: u64,
         clock: &Clock,
-        is_allowlisted: bool
+        is_allowlisted: bool,
+        from_balance: u64
     ): u8 {
         let now = clock.timestamp_ms();
+
+        // Step 0: Check Blacklist rule (if enabled)
+        if (is_rule_enabled(rule_engine, RULE_BLACKLIST)) {
+            if (is_blacklisted(rule_engine, from)) {
+                return CODE_BLACKLISTED
+            };
+            if (is_blacklisted(rule_engine, to)) {
+                return CODE_BLACKLISTED
+            };
+        };
+
+        // Step 0b: Check Sanction List rule (if enabled)
+        if (is_rule_enabled(rule_engine, RULE_SANCTION_LIST)) {
+            if (is_sanctioned(rule_engine, from)) {
+                return CODE_SANCTIONED
+            };
+            if (is_sanctioned(rule_engine, to)) {
+                return CODE_SANCTIONED
+            };
+        };
 
         // Step 1: Check VIP status (bypasses conditional transfer ONLY)
         if (is_vip(rule_engine, from) && is_vip(rule_engine, to)) {
@@ -454,9 +603,17 @@ module move_cmtat::rule_engine_v2 {
             if (code != CODE_VALID) return code;
         };
 
-        // Step 3: Allowlist check (always required)
-        if (!is_allowlisted) {
-            return CODE_NOT_ALLOWLISTED
+        // Step 3: Allowlist check (only if whitelist rule is enabled)
+        if (is_rule_enabled(rule_engine, RULE_WHITELIST)) {
+            if (!is_allowlisted) {
+                return CODE_NOT_ALLOWLISTED
+            };
+        };
+
+        // Step 4: Check Max Balance (if set) - transfer amount cannot exceed max
+        let max_balance = rule_engine.config.max_balance;
+        if (max_balance > 0 && value > max_balance) {
+            return CODE_EXCEEDS_MAX_BALANCE
         };
 
         CODE_VALID
@@ -506,9 +663,10 @@ module move_cmtat::rule_engine_v2 {
         to: address,
         value: u64,
         clock: &Clock,
-        is_allowlisted: bool
+        is_allowlisted: bool,
+        from_balance: u64
     ): u8 {
-        validate_transfer(rule_engine, from, to, value, clock, is_allowlisted)
+        validate_transfer(rule_engine, from, to, value, clock, is_allowlisted, from_balance)
     }
 
     public fun require_valid_transfer(
@@ -517,9 +675,10 @@ module move_cmtat::rule_engine_v2 {
         to: address,
         value: u64,
         clock: &Clock,
-        is_allowlisted: bool
+        is_allowlisted: bool,
+        from_balance: u64
     ) {
-        let code = validate_transfer(rule_engine, from, to, value, clock, is_allowlisted);
+        let code = validate_transfer(rule_engine, from, to, value, clock, is_allowlisted, from_balance);
         assert!(code == CODE_VALID, ETransferRestricted)
     }
 
@@ -544,9 +703,10 @@ module move_cmtat::rule_engine_v2 {
         to: address,
         value: u64,
         clock: &Clock,
-        is_allowlisted: bool
+        is_allowlisted: bool,
+        from_balance: u64
     ): bool {
-        let code = validate_transfer(rule_engine, from, to, value, clock, is_allowlisted);
+        let code = validate_transfer(rule_engine, from, to, value, clock, is_allowlisted, from_balance);
         code == CODE_VALID
     }
 

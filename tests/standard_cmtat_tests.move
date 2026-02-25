@@ -220,8 +220,8 @@ module move_cmtat::standard_cmtat_tests {
             // RuleEngine should be active by default after init
             assert!(standard_cmtat::rule_engine_active(&state), 0);
 
-            // Whitelist rule should be enabled by default
-            assert!(standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 1);
+            // Whitelist rule is NOT enabled by default - users enable it explicitly
+            assert!(!standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 1);
 
             test_scenario::return_shared(state);
         };
@@ -313,22 +313,29 @@ module move_cmtat::standard_cmtat_tests {
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
             let mut state = test_scenario::take_shared<StandardCMTATState>(scenario);
 
-            // Whitelist should be enabled by default
-            assert!(standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 0);
+            // Whitelist is NOT enabled by default
+            assert!(!standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 0);
+
+            // Add whitelist rule
+            let ctx = test_scenario::ctx(scenario);
+            standard_cmtat::add_rule(&admin_cap, &mut state, rule_engine_v2::rule_whitelist(), ctx);
+
+            // Whitelist should be enabled now
+            assert!(standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 1);
 
             // Remove whitelist rule
             let ctx = test_scenario::ctx(scenario);
             standard_cmtat::remove_rule(&admin_cap, &mut state, rule_engine_v2::rule_whitelist(), ctx);
 
             // Whitelist should be disabled
-            assert!(!standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 1);
+            assert!(!standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 2);
 
             // Add whitelist rule back
             let ctx = test_scenario::ctx(scenario);
             standard_cmtat::add_rule(&admin_cap, &mut state, rule_engine_v2::rule_whitelist(), ctx);
 
             // Whitelist should be enabled again
-            assert!(standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 2);
+            assert!(standard_cmtat::is_rule_enabled(&state, rule_engine_v2::rule_whitelist()), 3);
 
             test_scenario::return_to_sender(scenario, admin_cap);
             test_scenario::return_shared(state);

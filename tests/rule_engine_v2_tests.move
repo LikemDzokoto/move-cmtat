@@ -170,7 +170,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
@@ -422,7 +423,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
@@ -440,10 +442,21 @@ module move_cmtat::rule_engine_v2_tests {
 
         setup(scenario);
 
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_whitelist(), ctx);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
         test_scenario::next_tx(scenario, USER1);
         {
-            let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
             let code = rule_engine_v2::validate_transfer(
                 &rule_engine,
@@ -451,7 +464,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                false
+                false,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_not_allowlisted(), 0);
 
@@ -490,7 +504,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_conditional_required(), 0);
 
@@ -564,7 +579,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
@@ -638,7 +654,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_request_denied(), 0);
 
@@ -712,7 +729,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(can_exec == true, 0);
 
@@ -833,7 +851,7 @@ module move_cmtat::rule_engine_v2_tests {
             let rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
 
-            let can_exec = rule_engine_v2::can_execute(&rule_engine, USER1, USER2, 1000, &clock, true);
+            let can_exec = rule_engine_v2::can_execute(&rule_engine, USER1, USER2, 1000, &clock, true, 0);
             assert!(can_exec == true, 0);
 
             test_scenario::return_shared(rule_engine);
@@ -873,7 +891,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
             assert!(code == rule_engine_v2::restriction_code_valid(), 0);
 
@@ -931,7 +950,8 @@ module move_cmtat::rule_engine_v2_tests {
                 USER2,
                 1000,
                 &clock,
-                true
+                true,
+                0
             );
 
             test_scenario::return_shared(rule_engine);
@@ -948,5 +968,221 @@ module move_cmtat::rule_engine_v2_tests {
         assert!(rule_engine_v2::status_approved() == 2, 2);
         assert!(rule_engine_v2::status_denied() == 3, 3);
         assert!(rule_engine_v2::status_executed() == 4, 4);
+    }
+
+    // ============ BLACKLIST TESTS ============
+
+    #[test]
+    fun test_add_remove_blacklist() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(!rule_engine_v2::is_blacklisted(&rule_engine, USER1), 0);
+
+            rule_engine_v2::add_to_blacklist(&mut rule_engine, USER1, ctx);
+            assert!(rule_engine_v2::is_blacklisted(&rule_engine, USER1), 1);
+
+            rule_engine_v2::remove_from_blacklist(&mut rule_engine, USER1, ctx);
+            assert!(!rule_engine_v2::is_blacklisted(&rule_engine, USER1), 2);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_blacklist_rule_validation() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            // Enable blacklist rule
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_blacklist(), ctx);
+            
+            // Add USER1 to blacklist
+            rule_engine_v2::add_to_blacklist(&mut rule_engine, USER1, ctx);
+
+            // Validate transfer - should be blacklisted
+            let code = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER1,
+                USER2,
+                100,
+                &clock,
+                true,
+                0
+            );
+            assert!(code == rule_engine_v2::restriction_code_blacklisted(), 0);
+
+            // Validate transfer from non-blacklisted - should be valid
+            let code2 = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER2,
+                USER3,
+                100,
+                &clock,
+                true,
+                0
+            );
+            assert!(code2 == rule_engine_v2::restriction_code_valid(), 1);
+
+            test_scenario::return_shared(rule_engine);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ============ SANCTION LIST TESTS ============
+
+    #[test]
+    fun test_add_remove_sanction_list() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(!rule_engine_v2::is_sanctioned(&rule_engine, USER1), 0);
+
+            rule_engine_v2::add_to_sanction_list(&mut rule_engine, USER1, ctx);
+            assert!(rule_engine_v2::is_sanctioned(&rule_engine, USER1), 1);
+
+            rule_engine_v2::remove_from_sanction_list(&mut rule_engine, USER1, ctx);
+            assert!(!rule_engine_v2::is_sanctioned(&rule_engine, USER1), 2);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_sanction_list_rule_validation() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            // Enable sanction rule
+            rule_engine_v2::add_rule(&mut rule_engine, rule_engine_v2::rule_sanction_list(), ctx);
+            
+            // Add USER1 to sanction list
+            rule_engine_v2::add_to_sanction_list(&mut rule_engine, USER1, ctx);
+
+            // Validate transfer - should be sanctioned
+            let code = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER1,
+                USER2,
+                100,
+                &clock,
+                true,
+                0
+            );
+            assert!(code == rule_engine_v2::restriction_code_sanctioned(), 0);
+
+            test_scenario::return_shared(rule_engine);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ============ MAX BALANCE TESTS ============
+
+    #[test]
+    fun test_set_and_get_max_balance() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(rule_engine_v2::get_max_balance(&rule_engine) == 0, 0);
+
+            rule_engine_v2::set_max_balance(&mut rule_engine, 10000, ctx);
+            assert!(rule_engine_v2::get_max_balance(&rule_engine) == 10000, 1);
+
+            test_scenario::return_shared(rule_engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_max_balance_validation() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut rule_engine = test_scenario::take_shared<RuleEngine>(scenario);
+            let clock = test_scenario::take_shared<Clock>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            // Set max balance to 1000 (max transfer amount per transaction)
+            rule_engine_v2::set_max_balance(&mut rule_engine, 1000, ctx);
+
+            // Transfer 500 - should pass (500 <= 1000)
+            let code1 = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER1,
+                USER2,
+                500,
+                &clock,
+                true,
+                1000
+            );
+            assert!(code1 == rule_engine_v2::restriction_code_valid(), 0);
+
+            // Transfer 1500 - should fail (1500 > 1000)
+            let code2 = rule_engine_v2::validate_transfer(
+                &rule_engine,
+                USER1,
+                USER2,
+                1500,
+                &clock,
+                true,
+                1000
+            );
+            assert!(code2 == rule_engine_v2::restriction_code_exceeds_max_balance(), 1);
+
+            test_scenario::return_shared(rule_engine);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::end(scenario_val);
     }
 }
