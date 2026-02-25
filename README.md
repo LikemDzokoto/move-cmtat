@@ -2,7 +2,7 @@
 
 > A native IOTA Move implementation of Switzerland's Capital Markets Technology Association token standard
 
-**⚠️ WORK IN PROGRESS - ~72% CMTAT Compliant**
+**⚠️ WORK IN PROGRESS - ~80% CMTAT Compliant**
 
 This project implements the CMTAT security token standard natively in IOTA Move, leveraging IOTA's object model and native token architecture for superior security and compliance capabilities.
 
@@ -53,12 +53,11 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 
 ### ⚠️ Integration Work Required
 
-The following components are fully implemented and tested but require integration into the token contracts:
+The following components are fully implemented and tested and are now integrated into the token contracts:
 
+- **RuleEngine v2** - ✅ Fully integrated into standard_cmtat, allowlist_cmtat, and debt_cmtat
 - **Document Registry** - Component exists but not yet integrated into contract state
-- **RuleEngine v2** - Comprehensive implementation tested but not wired to transfer validation
 - **Debt Module** - Basic structure complete, needs enhancement with full instrument fields
-- **Engines** - All engines tested but not yet integrated into token contract workflows
 
 ### 🔴 Critical Features In Development
 
@@ -281,6 +280,9 @@ A comprehensive rule validation system implementing hierarchical compliance chec
 - **Request Lifecycle** - Waiting → Approved → Executed workflow
 - **Time-Based Controls** - Approval deadlines, execution windows
 - **Configurable Rules** - Enable/disable specific validation rules
+- **Blacklist** - Block specific addresses from transacting
+- **Sanction List** - Block sanctioned addresses from transacting
+- **Max Balance** - Limit maximum transfer amount per transaction
 
 ### Restriction Codes
 
@@ -292,6 +294,9 @@ Implements CMTAT compliant transfer restriction codes:
 - `3` - Frozen receiver
 - `4` - Not allowlisted
 - `5` - Insufficient balance
+- `6` - Blacklisted address
+- `7` - Sanctioned address
+- `8` - Exceeds max balance
 - `10` - Conditional transfer required
 - `11` - Transfer pending approval
 - `12` - Transfer request denied
@@ -300,7 +305,7 @@ Implements CMTAT compliant transfer restriction codes:
 
 ### Integration
 
-RuleEngine v2 is fully implemented and tested but requires integration into contract transfer functions to enforce validation rules during token transfers.
+RuleEngine v2 is fully integrated into `standard_cmtat`, `allowlist_cmtat`, and `debt_cmtat` contracts. All transfers go through rule validation before execution.
 
 ---
 
@@ -337,7 +342,7 @@ iota move test --filter rule_engine_v2
 iota move test --filter snapshot_engine
 ```
 
-**Test Status:** 130+ tests including 5 integration tests
+**Test Status:** 214 tests including 6 integration tests
 
 ### Integration Tests
 
@@ -350,6 +355,7 @@ Cross-contract flow tests verifying end-to-end scenarios:
 | `test_freeze_pause_flow` | freeze address → unfreeze |
 | `test_deactivation_flow` | init → mint → deactivate |
 | `test_role_escalation_flow` | grant minter → grant pauser → test capabilities |
+| `test_rule_engine_integration` | init → whitelist rule → VIP bypass → blacklist → max balance |
 
 Run with: `iota move test --filter integration`
 
@@ -362,7 +368,7 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 
 ## CMTAT Compliance
 
-### Current Compliance: ~72%
+### Current Compliance: ~80%
 
 **Fully Compliant Areas:**
 - Core token functionality (via native Coin<T>)
@@ -372,9 +378,9 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 - Snapshot functionality
 - Interest calculations
 - Bond validation
+- RuleEngine v2 (blacklist, sanction list, max balance, conditional transfers)
 
 **Partial Compliance:**
-- RuleEngine (implemented but not integrated)
 - Document management (component ready but not integrated)
 - Debt module (basic structure, needs full instrument fields)
 
@@ -446,4 +452,4 @@ Mozilla Public License 2.0 (MPL-2.0)
 
 *Built with IOTA Move native architecture for compliant securities*
 
-*Version 0.2.0 - Work in Progress (~72% CMTAT Compliant)*
+*Version 0.2.1 - Work in Progress (~80% CMTAT Compliant)*

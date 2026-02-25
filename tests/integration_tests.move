@@ -299,7 +299,6 @@ module move_cmtat::integration_tests {
         {
             let deny_list = test_scenario::take_shared<DenyList>(scenario);
             
-            let ctx = test_scenario::ctx(scenario);
             // Verify frozen status (not needed to assert)
             
             test_scenario::return_shared(deny_list);
@@ -458,7 +457,6 @@ module move_cmtat::integration_tests {
         {
             let deny_list = test_scenario::take_shared<DenyList>(scenario);
             
-            let ctx = test_scenario::ctx(scenario);
             // Verify paused status (not needed to assert)
             
             test_scenario::return_shared(deny_list);
