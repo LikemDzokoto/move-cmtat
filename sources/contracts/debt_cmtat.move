@@ -1,6 +1,6 @@
 /// Debt CMTAT - Native Coin<T> for Debt Securities
 /// Specialized for corporate bonds and debt instruments
-/// Implements debt-specific controls with native DenyList
+/// Implements debt-specific controls 
 module move_cmtat::debt_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
@@ -40,7 +40,7 @@ module move_cmtat::debt_cmtat {
         debt_state: debt::DebtState,
     }
 
-    // ========== CAPABILITIES ==========
+   
     public struct AdminCap has key, store { id: object::UID }
     public struct MintCap has key, store { id: object::UID }
     public struct BurnCap has key, store { id: object::UID }
@@ -162,7 +162,7 @@ module move_cmtat::debt_cmtat {
         };
 
         // state with snapshot engine and rule engine
-        let state = DebtCMTATState {
+        let state = DebtCMTATState {    
             id: object::new(ctx),
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
             rule_engine: rule_engine_v2::init_rule_engine_v2(ctx),
@@ -175,7 +175,7 @@ module move_cmtat::debt_cmtat {
             debt_state: debt::init_debt_state(ctx),
         };
 
-        // Create capabilities
+        // capabilities creation
         let deployer = tx_context::sender(ctx);
         let admin_cap = AdminCap { id: object::new(ctx) };
         let mint_cap = MintCap { id: object::new(ctx) };
@@ -203,7 +203,7 @@ module move_cmtat::debt_cmtat {
         transfer::transfer(enforcer_cap, deployer);
     }
 
-    // ========== VIEW FUNCTIONS (Native CoinMetadata) ==========
+    // ========== VIEW FUNCTIONS  ==========
     public fun name(metadata: &CoinMetadata<DEBT_CMTAT>): String {
         coin::get_name(metadata)
     }
@@ -227,7 +227,7 @@ module move_cmtat::debt_cmtat {
     public fun document_uri(registry: &CMTATRegistry): String { registry.document_uri }
     public fun deactivated(registry: &CMTATRegistry): bool { registry.deactivated }
 
-    // ========== COMPLIANCE VIEWS (Native DenyList) ==========
+    // ========== COMPLIANCE VIEWS  ==========
     public fun is_paused(deny_list: &deny_list::DenyList, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_is_global_pause_enabled_current_epoch<DEBT_CMTAT>(deny_list, ctx)
     }
@@ -254,7 +254,7 @@ module move_cmtat::debt_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
-    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
+
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         treasury_cap: TreasuryCap<DEBT_CMTAT>,
@@ -446,7 +446,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
+    // ========== MINTING FUNCTIONS  ==========
     public fun mint(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         registry: &CMTATRegistry,
@@ -501,7 +501,7 @@ module move_cmtat::debt_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== BURNING FUNCTIONS (Native Coin<T>) ==========
+    // ========== BURNING FUNCTIONS  ==========
     public fun burn(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         coins: Coin<DEBT_CMTAT>,
@@ -529,7 +529,7 @@ module move_cmtat::debt_cmtat {
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS (Native DenyList) ==========
+    // ========== PAUSE FUNCTIONS  ==========
     public entry fun pause(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
@@ -573,7 +573,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== FREEZE FUNCTIONS (Native DenyList) ==========
+    // ========== FREEZE FUNCTIONS  ==========
     public entry fun set_address_frozen(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,

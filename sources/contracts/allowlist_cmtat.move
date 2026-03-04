@@ -12,7 +12,7 @@ module move_cmtat::allowlist_cmtat {
     use move_cmtat::snapshot_engine;
     use move_cmtat::rule_engine_v2;
 
-    // ========== ONE-TIME WITNESS ==========
+    
     public struct ALLOWLIST_CMTAT has drop {}
 
     // ========== CMTAT REGISTRY ==========
@@ -38,7 +38,7 @@ module move_cmtat::allowlist_cmtat {
         allowlist_state: allowlist::AllowlistState,
     }
 
-    // ========== CAPABILITIES ==========
+
     public struct AdminCap has key, store { id: UID }
     public struct MintCap has key, store { id: UID }
     public struct BurnCap has key, store { id: UID }
@@ -132,7 +132,7 @@ module move_cmtat::allowlist_cmtat {
     const ERuleEngineNotActive: u64 = 3;
     const ERuleEngineAlreadyActive: u64 = 4;
 
-    // ========== INIT FUNCTION ==========
+
     fun init(witness: ALLOWLIST_CMTAT, ctx: &mut TxContext) {
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
             witness,
@@ -161,7 +161,7 @@ module move_cmtat::allowlist_cmtat {
             rule_engine_active: true,
         };
 
-        // Create compliance state with allowlist state only
+        //compliance state with allowlist state only
         let compliance_state = ComplianceState {
             id: object::new(ctx),
             allowlist_state: allowlist::init_allowlist_state(ctx),
@@ -236,7 +236,7 @@ module move_cmtat::allowlist_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
-    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
+    // Note: Grant functions transfer TreasuryCap/DenyCap 
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         treasury_cap: TreasuryCap<ALLOWLIST_CMTAT>,
@@ -411,7 +411,7 @@ module move_cmtat::allowlist_cmtat {
         });
     }
 
-    // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
+   
     public fun mint(
         treasury_cap: &mut TreasuryCap<ALLOWLIST_CMTAT>,
         registry: &CMTATRegistry,
@@ -466,7 +466,7 @@ module move_cmtat::allowlist_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== BURNING FUNCTIONS (Native Coin<T>) ==========
+    // ========== BURNING FUNCTIONS  ==========
     public fun burn(
         treasury_cap: &mut TreasuryCap<ALLOWLIST_CMTAT>,
         coins: Coin<ALLOWLIST_CMTAT>,
@@ -488,7 +488,7 @@ module move_cmtat::allowlist_cmtat {
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS (Native DenyList) ==========
+    // ========== PAUSE FUNCTIONS  ==========
     public entry fun pause(
         deny_list: &mut DenyList,
         deny_cap: &mut DenyCapV1<ALLOWLIST_CMTAT>,
@@ -532,7 +532,7 @@ module move_cmtat::allowlist_cmtat {
         });
     }
 
-    // ========== FREEZE FUNCTIONS (Native DenyList) ==========
+    // ========== FREEZE FUNCTIONS  ==========
     public entry fun set_address_frozen(
         deny_list: &mut DenyList,
         deny_cap: &mut DenyCapV1<ALLOWLIST_CMTAT>,

@@ -1,5 +1,5 @@
-/// Light CMTAT - Fully IOTA Native Regulated Token Implementation
-/// CORRECTED VERSION - All compilation errors fixed
+/// Light CMTAT - minimal feature set 
+
 module move_cmtat::light_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
@@ -7,10 +7,10 @@ module move_cmtat::light_cmtat {
 
     use iota::event;
 
-    // ========== ONE-TIME WITNESS ==========
+ 
     public struct LIGHT_CMTAT has drop {}
 
-    // ========== CAPABILITIES ==========
+   
     public struct AdminCap has key, store {
         id: object::UID,
     }
@@ -93,7 +93,7 @@ module move_cmtat::light_cmtat {
     const ELengthMismatch: u64 = 3;
     const EInvalidAmount: u64 = 5;
 
-    // ========== INIT FUNCTION ==========
+  
     fun init(witness: LIGHT_CMTAT, ctx: &mut tx_context::TxContext) {
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
             witness,
@@ -134,8 +134,6 @@ module move_cmtat::light_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
-    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
-    // where granting a role gives the user full capability to perform actions
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         treasury_cap: TreasuryCap<LIGHT_CMTAT>,

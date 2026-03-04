@@ -1,6 +1,5 @@
-/// Standard CMTAT - Full Feature Set with Native Coin<T> Architecture
-/// Implements CMTAT compliant transfer restriction validation
-/// Uses capability-based access control and native IOTA Coin<T> with DenyList
+/// Standard CMTAT - Full Feature Set 
+
 module move_cmtat::standard_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
@@ -13,10 +12,10 @@ module move_cmtat::standard_cmtat {
     use move_cmtat::snapshot_engine;
 
 
-    // ========== ONE-TIME WITNESS ==========
+    
     public struct STANDARD_CMTAT has drop {}
 
-    // ========== CMTAT REGISTRY  ==========
+ 
     public struct CMTATRegistry has key {
         id: object::UID,
         terms: String,
@@ -34,7 +33,7 @@ module move_cmtat::standard_cmtat {
         rule_engine_active: bool,
     }
 
-    // ========== CAPABILITIES ==========
+    
     public struct AdminCap has key, store { id: object::UID }
     public struct MintCap has key, store { id: object::UID }
     public struct BurnCap has key, store { id: object::UID }
@@ -115,19 +114,19 @@ module move_cmtat::standard_cmtat {
 
     // ========== INIT FUNCTION ==========
     fun init(witness: STANDARD_CMTAT, ctx: &mut tx_context::TxContext) {
-        // Create native regulated currency with DenyList integration
+       
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
             witness,
-            9,                                          // decimals
-            b"STCMTAT",                                // symbol
-            b"Standard CMTAT Token",                   // name
-            b"CMTAT Standard with full compliance",    // description
-            option::none(),                             // icon_url
-            true,                                       // allow global pause
+            9,                                         
+            b"STCMTAT",                                
+            b"Standard CMTAT Token",                   
+            b"CMTAT Standard with full compliance",    
+            option::none(),                             
+            true,                                       
             ctx
         );
 
-        // Create CMTAT-specific registry
+       
         let registry = CMTATRegistry {
             id: object::new(ctx),
             terms: string::utf8(b""),
@@ -137,7 +136,7 @@ module move_cmtat::standard_cmtat {
             deactivated: false,
         };
 
-        // Create state with engines
+     
         let rule_engine = rule_engine_v2::init_rule_engine_v2(ctx);
         
         let state = StandardCMTATState {
@@ -147,7 +146,7 @@ module move_cmtat::standard_cmtat {
             rule_engine_active: true,
         };
 
-        // Create capability objects
+     
         let deployer = tx_context::sender(ctx);
         let admin_cap = AdminCap { id: object::new(ctx) };
         let mint_cap = MintCap { id: object::new(ctx) };
@@ -160,7 +159,7 @@ module move_cmtat::standard_cmtat {
         transfer::public_transfer(treasury_cap, deployer);
         transfer::public_transfer(deny_cap, deployer);
 
-        // Freeze CoinMetadata (immutable)
+     
         transfer::public_freeze_object(coin_metadata);
 
         // Share registry and states
@@ -215,7 +214,7 @@ module move_cmtat::standard_cmtat {
     }
 
     // ========== CAPABILITY GRANTING ==========
-    // Note: Grant functions transfer TreasuryCap/DenyCap to enable EVM-like behavior
+ 
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         treasury_cap: TreasuryCap<STANDARD_CMTAT>,
@@ -330,7 +329,7 @@ module move_cmtat::standard_cmtat {
         });
     }
 
-    // ========== MINTING FUNCTIONS (Native Coin<T>) ==========
+    // ========== MINTING FUNCTIONS ==========
     public fun mint(
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
@@ -382,7 +381,7 @@ module move_cmtat::standard_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== BURNING FUNCTIONS (Native Coin<T>) ==========
+    // ========== BURNING FUNCTIONS ==========
     public fun burn(
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         coins: Coin<STANDARD_CMTAT>,
@@ -410,7 +409,7 @@ module move_cmtat::standard_cmtat {
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS (Native DenyList) ==========
+    // ========== PAUSE FUNCTIONS  ==========
     public entry fun pause(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
@@ -454,7 +453,7 @@ module move_cmtat::standard_cmtat {
         });
     }
 
-    // ========== FREEZE FUNCTIONS (Native DenyList) ==========
+    // ========== FREEZE FUNCTIONS  ==========
     public entry fun set_address_frozen(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,

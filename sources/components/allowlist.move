@@ -2,17 +2,17 @@
 module move_cmtat::allowlist {
     use iota::table::{Self, Table};
 
-    /// Errors
+ 
     const ENotAllowlisted: u64 = 300;
 
-    /// Allowlist state
+
     public struct AllowlistState has key, store {
         id: UID,
         enabled: bool,
         allowlisted: Table<address, bool>,
     }
 
-    /// Initialize allowlist state
+    
     public fun init_allowlist_state(ctx: &mut TxContext): AllowlistState {
         AllowlistState {
             id: object::new(ctx),
