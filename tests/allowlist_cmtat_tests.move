@@ -1,4 +1,4 @@
-/// Allowlist CMTAT Test Suite - Updated for Pure Native DenyList
+/// Allowlist CMTAT Test Suite 
 #[test_only]
 module move_cmtat::allowlist_cmtat_tests_new {
     use std::string;

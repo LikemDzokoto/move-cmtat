@@ -23,7 +23,7 @@ module move_cmtat::capability_tests {
                                      EnforcerCap as StandardEnforcerCap};
 
     // Import Debt CMTAT
-    use move_cmtat::debt_cmtat::{Self, DEBT_CMTAT, CMTATRegistry as DebtRegistry, ComplianceState as DebtComplianceState,
+    use move_cmtat::debt_cmtat::{Self, DEBT_CMTAT, CMTATRegistry as DebtRegistry, DebtCMTATState as DebtState,
                                  AdminCap as DebtAdminCap, 
                                  MintCap as DebtMintCap, 
                                  BurnCap as DebtBurnCap, 
@@ -921,7 +921,7 @@ module move_cmtat::capability_tests {
             let mint_cap = test_scenario::take_from_sender<DebtMintCap>(scenario);
             let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
             let registry = test_scenario::take_shared<DebtRegistry>(scenario);
-            let compliance_state = test_scenario::take_shared<DebtComplianceState>(scenario);
+            let compliance_state = test_scenario::take_shared<DebtState>(scenario);
             let deny_list = test_scenario::take_shared<DenyList>(scenario);
             let ctx = test_scenario::ctx(scenario);
             let coins = debt_cmtat::mint(&mut treasury_cap, &registry, &compliance_state, &deny_list, USER2, 1000, ctx);
@@ -952,11 +952,11 @@ module move_cmtat::capability_tests {
         test_scenario::next_tx(scenario, USER1);
         {
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
-            let mut compliance_state = test_scenario::take_shared<DebtComplianceState>(scenario);
+            let mut debt_state = test_scenario::take_shared<DebtState>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::set_debt(&debt_cap, &mut compliance_state, string::utf8(b"Test Debt Info"), ctx);
+            debt_cmtat::set_debt(&debt_cap, &mut debt_state, string::utf8(b"Test Debt Info"), ctx);
             test_scenario::return_to_sender(scenario, debt_cap);
-            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(debt_state);
         };
         test_scenario::end(scenario_val);
     }
@@ -968,21 +968,13 @@ module move_cmtat::capability_tests {
         setup_debt(scenario);
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_from_sender<DebtAdminCap>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let mut debt_state = test_scenario::take_shared<DebtState>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::grant_debt_manager(&admin_cap, debt_cap, USER1, ctx);
-            test_scenario::return_to_sender(scenario, admin_cap);
-        };
-        test_scenario::next_tx(scenario, USER1);
-        {
-            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
-            let mut compliance_state = test_scenario::take_shared<DebtComplianceState>(scenario);
-            let ctx = test_scenario::ctx(scenario);
-            debt_cmtat::flag_default(&debt_cap, &mut compliance_state, ctx);
-            assert!(debt_cmtat::is_default_flagged(&compliance_state), 0);
+            debt_cmtat::flag_default(&debt_cap, &mut debt_state, ctx);
+            assert!(debt_cmtat::is_default_flagged(&debt_state), 0);
             test_scenario::return_to_sender(scenario, debt_cap);
-            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(debt_state);
         };
         test_scenario::end(scenario_val);
     }

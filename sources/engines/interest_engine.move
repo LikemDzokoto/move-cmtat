@@ -32,6 +32,8 @@ module move_cmtat::interest_engine {
     const ECouponNotDue: u64 = 806;
     const EInvalidPrincipal: u64 = 807;
     const EInvalidRate: u64 = 808;
+    const EAlreadyClaimed: u64 = 809;
+    const EClaimNotDue: u64 = 810;
 
     // ========== STRUCTS ==========
     
@@ -76,6 +78,8 @@ module move_cmtat::interest_engine {
         id: UID,
         schedule: CouponSchedule,
         payment_history: Table<u64, CouponPayment>,  // coupon_number -> CouponPayment
+        // Claim tracking: encode (coupon_number, holder_address) as bytes -> claimed
+        claims: Table<vector<u8>, bool>,
         total_interest_paid: u64,
         total_interest_accrued: u64,
         last_calculation_time: u64,
@@ -129,6 +133,7 @@ module move_cmtat::interest_engine {
             id: object::new(ctx),
             schedule: init_empty_schedule(),
             payment_history: table::new(ctx),
+            claims: table::new(ctx),
             total_interest_paid: 0,
             total_interest_accrued: 0,
             last_calculation_time: 0,
@@ -700,5 +705,83 @@ module move_cmtat::interest_engine {
         require_coupon_exists(state, coupon_number);
         let coupon = get_coupon(state, coupon_number);
         assert!(!coupon.paid, ECouponAlreadyPaid);
+    }
+
+    // ========== CLAIM FUNCTIONS ==========
+
+    /// Encode coupon number and holder address into a key for claims table
+    fun encode_claim_key(coupon_number: u64, holder: address): vector<u8> {
+        let mut key = std::bcs::to_bytes(&coupon_number);
+        let addr_bytes = std::bcs::to_bytes(&holder);
+        vector::append(&mut key, addr_bytes);
+        key
+    }
+
+    /// Check if a coupon has been claimed by a holder
+    public fun is_claimed(state: &InterestEngineState, coupon_number: u64, holder: address): bool {
+        let key = encode_claim_key(coupon_number, holder);
+        if (table::contains(&state.claims, key)) {
+            *table::borrow(&state.claims, key)
+        } else {
+            false
+        }
+    }
+
+    /// Record a coupon claim for a holder (called after interest is distributed)
+    public fun record_claim(
+        state: &mut InterestEngineState,
+        coupon_number: u64,
+        holder: address
+    ) {
+        let key = encode_claim_key(coupon_number, holder);
+        if (table::contains(&state.claims, key)) {
+            // Already claimed, update to true
+            *table::borrow_mut(&mut state.claims, key) = true;
+        } else {
+            // New claim
+            table::add(&mut state.claims, key, true);
+        }
+    }
+
+    /// Claim coupon interest for a specific holder
+    /// Returns the amount due to the holder (0 if already claimed or invalid)
+    public fun claim_coupon(
+        state: &mut InterestEngineState,
+        coupon_number: u64,
+        holder: address,
+        holder_balance: u64,
+        current_time: u64
+    ): u64 {
+        // Check coupon exists
+        require_coupon_exists(state, coupon_number);
+        
+        // Check not already claimed
+        assert!(!is_claimed(state, coupon_number, holder), EAlreadyClaimed);
+        
+        let coupon = get_coupon(state, coupon_number);
+        
+        // Check coupon is due (payment date has passed)
+        assert!(current_time >= coupon.payment_date, EClaimNotDue);
+        
+        // Calculate holder's share: (balance / total_supply) * coupon_amount
+        if (coupon.principal_at_record == 0 || holder_balance == 0) {
+            return 0
+        };
+        
+        let share = (holder_balance as u128) * (coupon.total_amount as u128);
+        let amount = ((share / (coupon.principal_at_record as u128)) as u64);
+        
+        // Record the claim
+        record_claim(state, coupon_number, holder);
+        
+        // Update totals
+        state.total_interest_paid = state.total_interest_paid + amount;
+        
+        amount
+    }
+
+    /// Get the total number of claims recorded
+    public fun get_claim_count(state: &InterestEngineState): u64 {
+        table::length(&state.claims)
     }
 }

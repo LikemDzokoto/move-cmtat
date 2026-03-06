@@ -1,6 +1,7 @@
 /// Debt CMTAT - Native Coin<T> for Debt Securities
 /// Specialized for corporate bonds and debt instruments
 /// Implements debt-specific controls 
+#[allow(unused_const)]
 module move_cmtat::debt_cmtat {
     use std::string::{Self, String};
     use iota::coin::{Self, Coin, TreasuryCap, DenyCapV1, CoinMetadata};
@@ -12,6 +13,7 @@ module move_cmtat::debt_cmtat {
     use move_cmtat::debt;
     use move_cmtat::snapshot_engine;
     use move_cmtat::rule_engine_v2;
+    use move_cmtat::interest_engine;
 
 
     public struct DEBT_CMTAT has drop {}
@@ -26,18 +28,16 @@ module move_cmtat::debt_cmtat {
         deactivated: bool,
     }
 
-    // ========== STATE WITH SNAPSHOT ENGINE ==========
+    // ========== STATE WITH EMBEDDED DEBT + INTEREST ENGINE ==========
     public struct DebtCMTATState has key {
         id: object::UID,
         snapshot_engine: snapshot_engine::SnapshotEngine,
         rule_engine: rule_engine_v2::RuleEngine,
         rule_engine_active: bool,
-    }
-
-
-    public struct ComplianceState has key {
-        id: object::UID,
+        // EMBEDDED: Full debt state (identifier, instrument, terms, credit events)
         debt_state: debt::DebtState,
+        // EMBEDDED: Interest engine for coupon management
+        interest_engine: interest_engine::InterestEngineState,
     }
 
    
@@ -112,6 +112,18 @@ module move_cmtat::debt_cmtat {
         debt_manager: address,
     }
 
+    public struct DebtIdentifierUpdated has copy, drop {
+        debt_manager: address,
+    }
+
+    public struct DebtInstrumentUpdated has copy, drop {
+        debt_manager: address,
+    }
+
+    public struct BondTermsUpdated has copy, drop {
+        debt_manager: address,
+    }
+
     public struct CreditEventsUpdated has copy, drop {
         debt_manager: address,
     }
@@ -136,6 +148,9 @@ module move_cmtat::debt_cmtat {
     const EDebtInDefault: u64 = 4;
     const ERuleEngineNotActive: u64 = 5;
     const ERuleEngineAlreadyActive: u64 = 6;
+    const EMaturityReached: u64 = 7;
+    const ENotMaturedOrDefault: u64 = 8;
+    const EInvalidDenomination: u64 = 9;
 
 
     fun init(witness: DEBT_CMTAT, ctx: &mut tx_context::TxContext) {
@@ -161,18 +176,14 @@ module move_cmtat::debt_cmtat {
             deactivated: false,
         };
 
-        // state with snapshot engine and rule engine
+        // state with snapshot engine, rule engine, debt state, and interest engine
         let state = DebtCMTATState {    
             id: object::new(ctx),
             snapshot_engine: snapshot_engine::init_snapshot_engine(ctx),
             rule_engine: rule_engine_v2::init_rule_engine_v2(ctx),
             rule_engine_active: true,
-        };
-
-        //  compliance state with debt state only
-        let compliance_state = ComplianceState {
-            id: object::new(ctx),
             debt_state: debt::init_debt_state(ctx),
+            interest_engine: interest_engine::init_interest_engine(ctx),
         };
 
         // capabilities creation
@@ -192,7 +203,6 @@ module move_cmtat::debt_cmtat {
 
         transfer::share_object(registry);
         transfer::share_object(state);
-        transfer::share_object(compliance_state);
 
         transfer::transfer(admin_cap, deployer);
         transfer::transfer(mint_cap, deployer);
@@ -237,20 +247,87 @@ module move_cmtat::debt_cmtat {
     }
 
     // ========== DEBT-SPECIFIC VIEWS ==========
-    public fun debt(compliance_state: &ComplianceState): String {
-        debt::get_debt(&compliance_state.debt_state)
+    public fun debt_info(state: &DebtCMTATState): String {
+        debt::get_debt(&state.debt_state)
     }
 
-    public fun credit_events(compliance_state: &ComplianceState): debt::CreditEvents {
-        debt::get_credit_events(&compliance_state.debt_state)
+    public fun credit_events(state: &DebtCMTATState): debt::CreditEvents {
+        debt::get_credit_events(&state.debt_state)
     }
 
-    public fun debt_engine(compliance_state: &ComplianceState): address {
-        debt::get_debt_engine(&compliance_state.debt_state)
+    public fun debt_engine(state: &DebtCMTATState): address {
+        debt::get_debt_engine(&state.debt_state)
     }
 
-    public fun is_default_flagged(compliance_state: &ComplianceState): bool {
-        debt::is_default_flagged(&compliance_state.debt_state)
+    public fun is_default_flagged(state: &DebtCMTATState): bool {
+        debt::is_default_flagged(&state.debt_state)
+    }
+
+    public fun is_matured(state: &DebtCMTATState, current_time: u64): bool {
+        debt::is_matured_at_time(current_time, &state.debt_state)
+    }
+
+    public fun is_redeemed(state: &DebtCMTATState): bool {
+        debt::is_fully_redeemed(&state.debt_state)
+    }
+
+    // ========== DEBT IDENTIFIER VIEWS ==========
+    public fun get_issuer_name(state: &DebtCMTATState): String {
+        debt::get_issuer_name(&state.debt_state)
+    }
+
+    public fun get_issuer_description(state: &DebtCMTATState): String {
+        debt::get_issuer_description(&state.debt_state)
+    }
+
+    public fun get_isin(state: &DebtCMTATState): String {
+        debt::get_isin(&state.debt_state)
+    }
+
+    // ========== DEBT INSTRUMENT VIEWS ==========
+    public fun get_interest_rate(state: &DebtCMTATState): u64 {
+        debt::get_interest_rate(&state.debt_state)
+    }
+
+    public fun get_par_value(state: &DebtCMTATState): u64 {
+        debt::get_par_value(&state.debt_state)
+    }
+
+    public fun get_minimum_denomination(state: &DebtCMTATState): u64 {
+        debt::get_minimum_denomination(&state.debt_state)
+    }
+
+    public fun get_maturity_date(state: &DebtCMTATState): u64 {
+        debt::get_maturity_date(&state.debt_state)
+    }
+
+    public fun get_issuance_date(state: &DebtCMTATState): u64 {
+        debt::get_issuance_date(&state.debt_state)
+    }
+
+    public fun get_coupon_frequency(state: &DebtCMTATState): String {
+        debt::get_coupon_frequency(&state.debt_state)
+    }
+
+    public fun get_rating(state: &DebtCMTATState): String {
+        debt::get_rating(&state.debt_state)
+    }
+
+    // ========== INTEREST ENGINE VIEWS ==========
+    public fun get_total_interest_accrued(state: &DebtCMTATState, current_time: u64): u64 {
+        interest_engine::get_total_interest_accrued(&state.interest_engine, current_time)
+    }
+
+    public fun get_total_interest_paid(state: &DebtCMTATState): u64 {
+        interest_engine::get_total_interest_paid(&state.interest_engine)
+    }
+
+    public fun get_coupons_remaining(state: &DebtCMTATState): u64 {
+        interest_engine::get_coupons_remaining(&state.interest_engine)
+    }
+
+    public fun is_coupon_schedule_generated(state: &DebtCMTATState): bool {
+        interest_engine::is_schedule_generated(&state.interest_engine)
     }
 
     // ========== CAPABILITY GRANTING ==========
@@ -381,13 +458,155 @@ module move_cmtat::debt_cmtat {
     }
 
     // ========== DEBT-SPECIFIC FUNCTIONS ==========
+    
+    // ---- Debt Identifier ----
+    public entry fun set_debt_identifier(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        issuer_name: String,
+        issuer_description: String,
+        guarantor: String,
+        debt_holder_representative: String,
+        isin: String,
+        ctx: &tx_context::TxContext
+    ) {
+        let identifier = debt::create_debt_identifier(
+            issuer_name,
+            issuer_description,
+            guarantor,
+            debt_holder_representative,
+            isin
+        );
+        debt::set_debt_identifier(&mut state.debt_state, identifier);
+
+        event::emit(DebtIdentifierUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
+    }
+
+    // ---- Debt Instrument ----
+    public entry fun set_debt_instrument(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        interest_rate: u64,
+        par_value: u64,
+        minimum_denomination: u64,
+        issuance_date: u64,
+        maturity_date: u64,
+        coupon_frequency: String,
+        interest_schedule_format: String,
+        interest_payment_date: String,
+        day_count_convention: u8,
+        business_day_convention: u8,
+        currency: String,
+        currency_contract: address,
+        ctx: &tx_context::TxContext
+    ) {
+        let instrument = debt::create_debt_instrument(
+            interest_rate,
+            par_value,
+            minimum_denomination,
+            issuance_date,
+            maturity_date,
+            coupon_frequency,
+            interest_schedule_format,
+            interest_payment_date,
+            debt::u8_to_day_count(day_count_convention),
+            debt::u8_to_business_day(business_day_convention),
+            currency,
+            currency_contract
+        );
+        debt::set_debt_instrument(&mut state.debt_state, instrument);
+
+        event::emit(DebtInstrumentUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
+    }
+
+    // ---- Bond Terms ----
+    public entry fun set_bond_terms(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        call_schedule: String,
+        put_schedule: String,
+        sinking_fund_schedule: String,
+        convertible_terms: String,
+        collateral_description: String,
+        ctx: &tx_context::TxContext
+    ) {
+        let terms = debt::create_bond_terms(
+            call_schedule,
+            put_schedule,
+            sinking_fund_schedule,
+            convertible_terms,
+            collateral_description
+        );
+        debt::set_bond_terms(&mut state.debt_state, terms);
+
+        event::emit(BondTermsUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
+    }
+
+    // ---- Credit Events ----
+    public entry fun set_rating(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        rating: String,
+        ctx: &tx_context::TxContext
+    ) {
+        debt::set_rating(&mut state.debt_state, rating);
+
+        event::emit(CreditEventsUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
+    }
+
+    public entry fun flag_default(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        ctx: &tx_context::TxContext
+    ) {
+        debt::flag_default(&mut state.debt_state);
+
+        event::emit(DebtFlagged {
+            debt_cap_holder: tx_context::sender(ctx),
+        });
+    }
+
+    public entry fun flag_redeemed(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        ctx: &tx_context::TxContext
+    ) {
+        debt::flag_redeemed(&mut state.debt_state);
+
+        event::emit(CreditEventsUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
+    }
+
+    public entry fun set_next_coupon_date(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        next_coupon_date: u64,
+        ctx: &tx_context::TxContext
+    ) {
+        debt::set_next_coupon_date(&mut state.debt_state, next_coupon_date);
+
+        event::emit(CreditEventsUpdated {
+            debt_manager: tx_context::sender(ctx),
+        });
+    }
+
+    // ---- Legacy setters (backward compatibility) ----
     public entry fun set_debt(
         _debt_cap: &DebtCap,
-        compliance_state: &mut ComplianceState,
+        state: &mut DebtCMTATState,
         debt_info: String,
         ctx: &tx_context::TxContext
     ) {
-        debt::set_debt(&mut compliance_state.debt_state, debt_info);
+        debt::set_debt(&mut state.debt_state, debt_info);
 
         event::emit(DebtUpdated {
             debt_manager: tx_context::sender(ctx),
@@ -396,7 +615,7 @@ module move_cmtat::debt_cmtat {
 
     public entry fun set_credit_events(
         _debt_cap: &DebtCap,
-        compliance_state: &mut ComplianceState,
+        state: &mut DebtCMTATState,
         flag_default: bool,
         flag_redeemed: bool,
         flag_matured: bool,
@@ -413,7 +632,7 @@ module move_cmtat::debt_cmtat {
             principal_distributed,
             next_coupon_date,
         );
-        debt::set_credit_events(&mut compliance_state.debt_state, credit_events);
+        debt::set_credit_events(&mut state.debt_state, credit_events);
 
         event::emit(CreditEventsUpdated {
             debt_manager: tx_context::sender(ctx),
@@ -422,11 +641,11 @@ module move_cmtat::debt_cmtat {
 
     public entry fun set_debt_engine(
         _debt_cap: &DebtCap,
-        compliance_state: &mut ComplianceState,
+        state: &mut DebtCMTATState,
         engine: address,
         ctx: &tx_context::TxContext
     ) {
-        debt::set_debt_engine(&mut compliance_state.debt_state, engine);
+        debt::set_debt_engine(&mut state.debt_state, engine);
 
         event::emit(DebtEngineUpdated {
             debt_manager: tx_context::sender(ctx),
@@ -434,23 +653,11 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    public entry fun flag_default(
-        _debt_cap: &DebtCap,
-        compliance_state: &mut ComplianceState,
-        ctx: &tx_context::TxContext
-    ) {
-        debt::flag_default(&mut compliance_state.debt_state);
-
-        event::emit(DebtFlagged {
-            debt_cap_holder: tx_context::sender(ctx),
-        });
-    }
-
     // ========== MINTING FUNCTIONS  ==========
     public fun mint(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         registry: &CMTATRegistry,
-        compliance_state: &ComplianceState,
+        state: &DebtCMTATState,
         deny_list: &deny_list::DenyList,
         to: address,
         amount: u64,
@@ -459,7 +666,7 @@ module move_cmtat::debt_cmtat {
         assert!(!registry.deactivated, EModuleDeactivated);
         assert!(!is_paused(deny_list, ctx), EModulePaused);
         assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
-        debt::require_not_in_default(&compliance_state.debt_state);
+        debt::require_not_in_default(&state.debt_state);
 
         let coins = coin::mint(treasury_cap, amount, ctx);
 
@@ -476,7 +683,6 @@ module move_cmtat::debt_cmtat {
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         registry: &CMTATRegistry,
         state: &mut DebtCMTATState,
-        compliance_state: &ComplianceState,
         deny_list: &deny_list::DenyList,
         clock: &Clock,
         to: address,
@@ -497,7 +703,7 @@ module move_cmtat::debt_cmtat {
             );
         };
 
-        let coins = mint(treasury_cap, registry, compliance_state, deny_list, to, amount, ctx);
+        let coins = mint(treasury_cap, registry, state, deny_list, to, amount, ctx);
         transfer::public_transfer(coins, to);
     }
 
@@ -769,11 +975,26 @@ module move_cmtat::debt_cmtat {
         });
     }
 
+    // ========== TRANSFER VALIDATION (Internal) ==========
+    fun validate_transfer(
+        state: &DebtCMTATState,
+        amount: u64,
+        current_time: u64,
+    ) {
+        // Block if matured - transfers only allowed before maturity
+        assert!(!debt::is_matured_at_time(current_time, &state.debt_state), EMaturityReached);
+        
+        // Block if in default
+        debt::require_not_in_default(&state.debt_state);
+        
+        // Validate minimum denomination
+        debt::require_valid_minimum_denomination(&state.debt_state, amount);
+    }
+
     // ========== TRANSFER FUNCTIONS WITH VALIDATION ==========
     public entry fun transfer(
         registry: &CMTATRegistry,
         state: &mut DebtCMTATState,
-        compliance_state: &ComplianceState,
         deny_list: &deny_list::DenyList,
         clock: &Clock,
         coins: Coin<DEBT_CMTAT>,
@@ -781,12 +1002,14 @@ module move_cmtat::debt_cmtat {
         ctx: &tx_context::TxContext
     ) {
         let from = tx_context::sender(ctx);
+        let amount = coin::value(&coins);
+        let current_time = clock::timestamp_ms(clock);
 
         // Check deactivation
         assert!(!registry.deactivated, EModuleDeactivated);
 
-        // Check debt default status
-        assert!(!is_default_flagged(compliance_state), EDebtInDefault);
+        // Check debt default + maturity + denomination
+        validate_transfer(state, amount, current_time);
 
         // Check native DenyList
         assert!(!is_paused(deny_list, ctx), EModulePaused);
@@ -802,7 +1025,7 @@ module move_cmtat::debt_cmtat {
                 &state.rule_engine,
                 from,
                 to,
-                coin::value(&coins),
+                amount,
                 clock,
                 is_from_vip && is_to_vip,
                 0 // Max balance check deferred
@@ -811,6 +1034,170 @@ module move_cmtat::debt_cmtat {
 
         // Transfer the coins
         transfer::public_transfer(coins, to);
+    }
+
+    // ========== REDEMPTION FUNCTION ==========
+    public entry fun redeem(
+        treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
+        registry: &CMTATRegistry,
+        state: &mut DebtCMTATState,
+        deny_list: &deny_list::DenyList,
+        clock: &Clock,
+        coins: Coin<DEBT_CMTAT>,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let amount = coin::value(&coins);
+        let current_time = clock::timestamp_ms(clock);
+
+        // Check deactivation
+        assert!(!registry.deactivated, EModuleDeactivated);
+
+        // Check native DenyList
+        assert!(!is_paused(deny_list, ctx), EModulePaused);
+
+        // Only allowed when matured OR in default
+        let is_matured = debt::is_matured_at_time(current_time, &state.debt_state);
+        let is_default = debt::is_default(&state.debt_state);
+        assert!(is_matured || is_default, ENotMaturedOrDefault);
+
+        // Validate minimum denomination
+        debt::require_valid_minimum_denomination(&state.debt_state, amount);
+
+        // Burn the tokens
+        coin::burn(treasury_cap, coins);
+
+        // Update principal distributed
+        debt::record_principal_distribution(&mut state.debt_state, amount);
+
+        // Emit redemption event
+        event::emit(TokenBurned {
+            burner: tx_context::sender(ctx),
+            from: tx_context::sender(ctx),
+            amount,
+        });
+    }
+
+    // ========== INTEREST ENGINE FUNCTIONS ==========
+    
+    // ---- Coupon Schedule ----
+    public entry fun generate_coupon_schedule(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        treasury_cap: &TreasuryCap<DEBT_CMTAT>,
+        _clock: &Clock,
+        ctx: &mut tx_context::TxContext
+    ) {
+        // Read from debt instrument to get params
+        let issuance_date = debt::get_issuance_date(&state.debt_state);
+        let maturity_date = debt::get_maturity_date(&state.debt_state);
+        let frequency = debt::get_coupon_frequency(&state.debt_state);
+        let rate = debt::get_interest_rate(&state.debt_state);
+        let par_value = debt::get_par_value(&state.debt_state);
+        let total_supply = coin::total_supply(treasury_cap);
+        let day_count_convention = debt::day_count_to_u8(&debt::get_day_count_convention(&state.debt_state));
+
+        // Generate schedule using interest engine
+        interest_engine::generate_coupon_schedule(
+            &mut state.interest_engine,
+            issuance_date,
+            maturity_date,
+            frequency,
+            rate,
+            par_value,
+            total_supply,
+            day_count_convention,
+            ctx
+        );
+    }
+
+    // ---- Coupon Payment Recording ----
+    public entry fun record_coupon_payment(
+        _debt_cap: &DebtCap,
+        state: &mut DebtCMTATState,
+        coupon_number: u64,
+        clock: &Clock,
+        ctx: &mut tx_context::TxContext
+    ) {
+        let payment_time = clock::timestamp_ms(clock);
+        interest_engine::record_coupon_payment(
+            &mut state.interest_engine,
+            coupon_number,
+            payment_time,
+            ctx
+        );
+    }
+
+    // ---- Coupon Claims ----
+    public fun get_claimable_amount(
+        state: &DebtCMTATState,
+        coupon_number: u64,
+        holder_balance: u64
+    ): u64 {
+        interest_engine::calculate_account_interest(
+            &state.interest_engine,
+            coupon_number,
+            holder_balance
+        )
+    }
+
+    public fun get_next_coupon(state: &DebtCMTATState): Option<interest_engine::CouponPayment> {
+        interest_engine::get_next_coupon(&state.interest_engine)
+    }
+
+    public fun get_upcoming_coupons(state: &DebtCMTATState, current_time: u64): vector<interest_engine::CouponPayment> {
+        interest_engine::get_upcoming_coupons(&state.interest_engine, current_time)
+    }
+
+    public fun get_unpaid_coupons(state: &DebtCMTATState): vector<interest_engine::CouponPayment> {
+        interest_engine::get_unpaid_coupons(&state.interest_engine)
+    }
+
+    // ========== COUPON CLAIM FUNCTIONS ==========
+
+    /// Check if a coupon has been claimed by a holder
+    public fun is_coupon_claimed(
+        state: &DebtCMTATState,
+        coupon_number: u64,
+        holder: address
+    ): bool {
+        interest_engine::is_claimed(&state.interest_engine, coupon_number, holder)
+    }
+
+    /// Claim coupon interest for a specific holder
+    /// This calculates the holder's entitlement based on their balance at record date
+    /// and records the claim to prevent double-claiming
+    public fun claim_coupon(
+        state: &mut DebtCMTATState,
+        treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
+        coupon_number: u64,
+        holder_balance: u64,
+        clock: &Clock,
+        ctx: &mut tx_context::TxContext
+    ): Coin<DEBT_CMTAT> {
+        let current_time = clock::timestamp_ms(clock);
+        let holder = tx_context::sender(ctx);
+        
+        // Call interest engine to process claim
+        let amount = interest_engine::claim_coupon(
+            &mut state.interest_engine,
+            coupon_number,
+            holder,
+            holder_balance,
+            current_time
+        );
+        
+        // Mint the claimed interest to the holder
+        if (amount > 0) {
+            let coins = coin::mint(treasury_cap, amount, ctx);
+            coins
+        } else {
+            coin::zero(ctx)
+        }
+    }
+
+    /// Get total number of claims recorded
+    public fun get_claim_count(state: &DebtCMTATState): u64 {
+        interest_engine::get_claim_count(&state.interest_engine)
     }
 
     // ========== TEST-ONLY ==========
