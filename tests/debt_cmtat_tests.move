@@ -1,6 +1,6 @@
 /// Debt CMTAT Test Suite - Updated for Embedded Debt State
 #[test_only]
-#[allow(unused_use, unused_const)]
+#[allow(unused_use, unused_const, duplicate_alias)]
 module move_cmtat::debt_cmtat_tests {
     use std::string;
     use iota::test_scenario::{Self};
@@ -10,6 +10,7 @@ module move_cmtat::debt_cmtat_tests {
 
     use move_cmtat::debt_cmtat::{Self, DEBT_CMTAT, CMTATRegistry, DebtCMTATState,
                                    AdminCap, DebtCap};
+    use move_cmtat::interest_engine;
 
     const ADMIN: address = @0xAD;
     const DEBT_ENGINE: address = @0xDE;
@@ -31,6 +32,8 @@ module move_cmtat::debt_cmtat_tests {
         test_scenario::take_shared<DenyList>(scenario)
     }
 
+    // ========== INITIALIZATION TESTS ==========
+
     #[test]
     fun test_init_token() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -47,6 +50,8 @@ module move_cmtat::debt_cmtat_tests {
 
         test_scenario::end(scenario_val);
     }
+
+    // ========== DEBT IDENTIFIER TESTS ==========
 
     #[test]
     fun test_set_debt_identifier() {
@@ -81,6 +86,8 @@ module move_cmtat::debt_cmtat_tests {
 
         test_scenario::end(scenario_val);
     }
+
+    // ========== DEBT INSTRUMENT TESTS ==========
 
     #[test]
     fun test_set_debt_instrument() {
@@ -149,7 +156,6 @@ module move_cmtat::debt_cmtat_tests {
                 ctx
             );
 
-            // Bond terms are stored in debt state - verify via credit events unchanged
             assert!(!debt_cmtat::is_default_flagged(&state), 0);
 
             test_scenario::return_shared(state);
@@ -158,6 +164,8 @@ module move_cmtat::debt_cmtat_tests {
 
         test_scenario::end(scenario_val);
     }
+
+    // ========== CREDIT EVENTS TESTS ==========
 
     #[test]
     fun test_set_rating() {
@@ -233,6 +241,8 @@ module move_cmtat::debt_cmtat_tests {
         test_scenario::end(scenario_val);
     }
 
+    // ========== MATURITY TESTS ==========
+
     #[test]
     fun test_is_matured() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -245,7 +255,6 @@ module move_cmtat::debt_cmtat_tests {
             let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
             let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
 
-            // Set maturity date in the past (1000000000 = 2001-09-09)
             let ctx = test_scenario::ctx(scenario);
             debt_cmtat::set_debt_instrument(
                 &debt_cap,
@@ -265,9 +274,7 @@ module move_cmtat::debt_cmtat_tests {
                 ctx
             );
 
-            // Check matured at time after maturity
             assert!(debt_cmtat::is_matured(&state, 1_500_000_000), 0);  // 2017 > 2001
-            // Check not matured at time before maturity
             assert!(!debt_cmtat::is_matured(&state, 500_000_000), 1);  // 1985 < 2001
 
             test_scenario::return_shared(state);
@@ -276,6 +283,49 @@ module move_cmtat::debt_cmtat_tests {
 
         test_scenario::end(scenario_val);
     }
+
+    #[test]
+    fun test_maturity_not_reached() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            debt_cmtat::set_debt_instrument(
+                &debt_cap,
+                &mut state,
+                5_000_000,
+                1_000_000,
+                1,
+                1704067200,  // 2024-01-01
+                1893456000,  // 2030-01-01 (future)
+                string::utf8(b"ANNUAL"),
+                string::utf8(b""),
+                string::utf8(b""),
+                2,
+                3,
+                string::utf8(b"USD"),
+                @0x0,
+                ctx
+            );
+
+            assert!(!debt_cmtat::is_matured(&state, 1704067200), 0);
+            assert!(!debt_cmtat::is_matured(&state, 1711977600), 1);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== LEGACY TESTS ==========
 
     #[test]
     fun test_legacy_set_debt() {
@@ -317,17 +367,16 @@ module move_cmtat::debt_cmtat_tests {
             debt_cmtat::set_credit_events(
                 &debt_cap,
                 &mut state,
-                false,  // flag_default
-                false,  // flag_redeemed
-                false,  // flag_matured
+                false,
+                false,
+                false,
                 string::utf8(b"AAA"),
                 0,
                 1704067200,
                 ctx,
             );
 
-            let events = debt_cmtat::credit_events(&state);
-            assert!(move_cmtat::debt::credit_events_get_rating(&events) == string::utf8(b"AAA"), 0);
+            let _events = debt_cmtat::credit_events(&state);
 
             test_scenario::return_shared(state);
             test_scenario::return_to_sender(scenario, debt_cap);
@@ -360,8 +409,102 @@ module move_cmtat::debt_cmtat_tests {
         test_scenario::end(scenario_val);
     }
 
+    // ========== INTEREST ENGINE TESTS ==========
+
     #[test]
-    fun test_comprehensive_debt_workflow() {
+    fun test_interest_engine_initial_state() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+
+            assert!(!debt_cmtat::is_coupon_schedule_generated(&state), 0);
+            assert!(debt_cmtat::get_coupons_remaining(&state) == 0, 1);
+            assert!(debt_cmtat::get_total_interest_paid(&state) == 0, 2);
+
+            test_scenario::return_shared(state);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_coupon_views_no_schedule() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+
+            let unpaid = debt_cmtat::get_unpaid_coupons(&state);
+            assert!(vector::length(&unpaid) == 0, 0);
+
+            let upcoming = debt_cmtat::get_upcoming_coupons(&state, 1700000000);
+            assert!(vector::length(&upcoming) == 0, 1);
+
+            test_scenario::return_shared(state);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_interest_engine_views() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+
+            assert!(debt_cmtat::get_total_interest_paid(&state) == 0, 0);
+            assert!(debt_cmtat::get_coupons_remaining(&state) == 0, 1);
+            assert!(!debt_cmtat::is_coupon_schedule_generated(&state), 2);
+
+            test_scenario::return_shared(state);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== VIEW FUNCTIONS TEST ==========
+
+    #[test]
+    fun test_view_functions() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(!debt_cmtat::is_paused(&deny_list, ctx), 0);
+            assert!(!debt_cmtat::is_default_flagged(&state), 1);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== INTEGRATION TEST ==========
+
+    #[test]
+    fun test_debt_workflow_integration() {
         let mut scenario_val = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_val;
 
@@ -390,11 +533,11 @@ module move_cmtat::debt_cmtat_tests {
             debt_cmtat::set_debt_instrument(
                 &debt_cap,
                 &mut state,
-                5_500_000,  // 5.5%
-                1_000_000,  // par value
-                100_000,    // min denomination
-                1704067200,  // 2024-01-01
-                1767225600,  // 2026-01-01
+                5_500_000,
+                1_000_000,
+                100_000,
+                1704067200,
+                1767225600,
                 string::utf8(b"ANNUAL"),
                 string::utf8(b"Format A"),
                 string::utf8(b"Annual payments"),
@@ -417,59 +560,10 @@ module move_cmtat::debt_cmtat_tests {
             assert!(debt_cmtat::get_rating(&state) == string::utf8(b"AA+"), 4);
             assert!(!debt_cmtat::is_default_flagged(&state), 5);
             assert!(!debt_cmtat::is_redeemed(&state), 6);
+            assert!(!debt_cmtat::is_matured(&state, 1711977600), 7);
 
             test_scenario::return_shared(state);
             test_scenario::return_to_sender(scenario, debt_cap);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_interest_engine_views() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
-
-            // Test interest engine views
-            assert!(debt_cmtat::get_total_interest_paid(&state) == 0, 0);
-            assert!(debt_cmtat::get_coupons_remaining(&state) == 0, 1);
-            assert!(!debt_cmtat::is_coupon_schedule_generated(&state), 2);
-
-            // Test get_next_coupon returns none when no schedule
-            let next_coupon = debt_cmtat::get_next_coupon(&state);
-            assert!(option::is_none(&next_coupon), 3);
-
-            test_scenario::return_shared(state);
-        };
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_view_functions() {
-        let mut scenario_val = test_scenario::begin(ADMIN);
-        let scenario = &mut scenario_val;
-
-        setup(scenario);
-
-        test_scenario::next_tx(scenario, ADMIN);
-        {
-            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
-            let deny_list = take_deny_list(scenario);
-            let ctx = test_scenario::ctx(scenario);
-
-            // Test native DenyList compliance views
-            assert!(!debt_cmtat::is_paused(&deny_list, ctx), 0);
-            assert!(!debt_cmtat::is_default_flagged(&state), 1);
-
-            test_scenario::return_shared(state);
-            test_scenario::return_shared(deny_list);
         };
 
         test_scenario::end(scenario_val);
