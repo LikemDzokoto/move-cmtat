@@ -230,6 +230,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_shared(deny_list);
         };
 
+        // Advance epoch for pause to take effect
+        test_scenario::next_epoch(scenario, @0x0);
+
         // Transaction 2: Try to mint - should fail
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -273,6 +276,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_to_sender(scenario, deny_cap);
             test_scenario::return_shared(deny_list);
         };
+
+        // Advance epoch for freeze to take effect
+        test_scenario::next_epoch(scenario, @0x0);
 
         // Transaction 2: Try to mint to frozen address - should fail
         test_scenario::next_tx(scenario, ADMIN);
@@ -394,7 +400,7 @@ module move_cmtat::light_cmtat_tests_new {
             let minter_cap = test_scenario::take_from_sender<MinterCap>(scenario);
             let registry = test_scenario::take_shared<LightCMTATRegistry>(scenario);
             let deny_list = take_deny_list(scenario);
-            let coins = test_scenario::take_from_sender<coin::Coin<LIGHT_CMTAT>>(scenario);
+            let coins = test_scenario::take_from_address<coin::Coin<LIGHT_CMTAT>>(scenario, USER1);
 
             let ctx = test_scenario::ctx(scenario);
             light_cmtat::burn_from(&minter_cap, &mut treasury_cap, &registry, coins, ctx);
@@ -473,6 +479,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_shared(deny_list);
         };
 
+        // Advance epoch for freeze to take effect
+        test_scenario::next_epoch(scenario, @0x0);
+
         // Transaction 2: Verify frozen and unfreeze USER1
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -502,6 +511,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_to_sender(scenario, deny_cap);
             test_scenario::return_shared(deny_list);
         };
+
+        // Advance epoch for unfreeze to take effect
+        test_scenario::next_epoch(scenario, @0x0);
 
         // Transaction 4: Verify unfrozen
         test_scenario::next_tx(scenario, ADMIN);
@@ -539,6 +551,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_to_sender(scenario, deny_cap);
             test_scenario::return_shared(deny_list);
         };
+
+        // Advance epoch for freeze to take effect
+        test_scenario::next_epoch(scenario, @0x0);
 
         // Transaction 2: Verify both are frozen
         test_scenario::next_tx(scenario, ADMIN);
@@ -588,6 +603,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_shared(deny_list);
         };
 
+        // Advance epoch for pause to take effect
+        test_scenario::next_epoch(scenario, @0x0);
+
         // Transaction 3: Verify paused
         test_scenario::next_tx(scenario, ADMIN);
         {
@@ -613,6 +631,9 @@ module move_cmtat::light_cmtat_tests_new {
             test_scenario::return_shared(registry);
             test_scenario::return_shared(deny_list);
         };
+
+        // Advance epoch for unpause to take effect
+        test_scenario::next_epoch(scenario, @0x0);
 
         // Transaction 5: Verify not paused
         test_scenario::next_tx(scenario, ADMIN);
