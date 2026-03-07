@@ -2,7 +2,7 @@
 
 > A native IOTA Move implementation of Switzerland's Capital Markets Technology Association token standard
 
-**⚠️ WORK IN PROGRESS - ~80% CMTAT Compliant**
+**⚠️ WORK IN PROGRESS - ~85% CMTAT Compliant**
 
 This project implements the CMTAT security token standard natively in IOTA Move, leveraging IOTA's object model and native token architecture for superior security and compliance capabilities.
 
@@ -49,7 +49,7 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 **State Components:**
 - **Allowlist** - Whitelist management with enable/disable
 - **Document Registry** - CMTAT compliant document management (comprehensive implementation)
-- **Debt** - Basic debt structure with credit events tracking
+- **Debt** - Full debt instrument with identifier, instrument, bond terms, credit events
 
 ### ⚠️ Integration Work Required
 
@@ -200,8 +200,17 @@ Four contract implementations offering different feature sets:
 ### Debt CMTAT
 **Purpose:** Corporate bonds and debt instruments  
 **Capabilities:** + DebtCap, SnapshotCap  
-**Features:** All Light features + debt tracking + credit events + snapshots  
+**Features:** All Light features + debt tracking + credit events + snapshots + interest engine + maturity validation + redemption  
 **Use Case:** Corporate bonds, structured debt, fixed income securities
+
+**Debt Features:**
+- Debt Identifier (issuer name, ISIN, guarantor, holder representative)
+- Debt Instrument (interest rate, par value, maturity date, coupon frequency, day count conventions)
+- Bond Terms (call schedule, put schedule, sinking fund, collateral)
+- Credit Events (rating, default flag, redeemed flag, principal distributed)
+- Maturity Validation (transfers blocked when bond matures)
+- Redemption (allowed when matured or in default)
+- Interest Engine Integration (coupon schedule generation, payment recording, claim tracking)
 
 ### Standard CMTAT
 **Purpose:** General-purpose compliant token  
@@ -241,15 +250,25 @@ Four contract implementations offering different feature sets:
 - Transfer validation against allowlist
 
 **Debt Tracking (debt_cmtat):**
-- Debt information management
-- Credit events (default, redeemed, rating)
-- Default flagging
-- Snapshot support
+- Full debt instrument (identifier, instrument, bond terms)
+- Credit events (default, redeemed, rating, maturity)
+- Maturity validation (transfers blocked post-maturity)
+- Redemption (allowed when matured or in default)
+- Interest engine integration (coupon schedules, payment tracking, claim-based distribution)
 
 **Snapshot Engine:**
 - Balance snapshots at specific timestamps
 - Total supply tracking
 - Available across all contract variants
+
+**Interest Engine:**
+- Coupon schedule generation from debt instrument parameters
+- Support for ANNUAL, SEMI_ANNUAL, QUARTERLY, MONTHLY frequencies
+- Day count convention support (30/360, Actual/360, Actual/365, Actual/Actual)
+- Payment recording with timestamps
+- Claim-based interest distribution (holders claim interest based on balance at record date)
+- Prevents double-claiming via claims tracking table
+- Accrued interest calculations
 
 ### In Development
 
@@ -342,7 +361,7 @@ iota move test --filter rule_engine_v2
 iota move test --filter snapshot_engine
 ```
 
-**Test Status:** 214 tests including 6 integration tests
+**Test Status:** 220+ tests including 6 integration tests
 
 ### Integration Tests
 
@@ -368,7 +387,7 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 
 ## CMTAT Compliance
 
-### Current Compliance: ~80%
+### Current Compliance: ~85%
 
 **Fully Compliant Areas:**
 - Core token functionality (via native Coin<T>)
@@ -376,13 +395,14 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 - Pause/Freeze (via native DenyList)
 - Access control (capability-based)
 - Snapshot functionality
-- Interest calculations
+- Interest calculations & coupon schedules
 - Bond validation
 - RuleEngine v2 (blacklist, sanction list, max balance, conditional transfers)
+- Debt tracking (full instrument, maturity, redemption)
+- Claim-based interest distribution
 
 **Partial Compliance:**
 - Document management (component ready but not integrated)
-- Debt module (basic structure, needs full instrument fields)
 
 **Critical Gaps:**
 - Forced transfer (regulatory requirement)
