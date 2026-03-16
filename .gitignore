@@ -24,6 +24,9 @@ Thumbs.db
 .env
 .env.local
 
+
+skills/
+
 # Dependencies
 node_modules/
 
@@ -38,6 +41,8 @@ BUG_FIXES_AND_TEST_REFACTORING.md
 REFACTORING_STATUS.md
 SOURCES_CHEATSHEET.md
 CMTAT_FUNCTIONAL_ANALYSIS.md
+ai_comment_report.md
+move-cmtat-threat-model.md
 
 .cursorignore
 .claude 

@@ -1,5 +1,5 @@
 /// Debt Component Test Suite - Tests for debt data structures and getters
-/// Simplified version avoiding drop issues with DebtState
+
 #[test_only]
 #[allow(unused_use, unused_function, unused_const)]
 module move_cmtat::debt_tests {
@@ -112,7 +112,7 @@ module move_cmtat::debt_tests {
 
     #[test]
     fun test_instrument_setters() {
-        let mut instrument = debt::init_debt_instrument();
+        let  instrument = debt::init_debt_instrument();
 
         // These test the struct field setters
         assert!(debt::instrument_get_interest_rate(&instrument) == 0, 0);
@@ -120,7 +120,7 @@ module move_cmtat::debt_tests {
 
     #[test]
     fun test_identifier_setters() {
-        let mut identifier = debt::init_debt_identifier();
+        let  identifier = debt::init_debt_identifier();
 
         // These test the struct field operations
         assert!(debt::identifier_get_issuer_name(&identifier) == string::utf8(b""), 0);

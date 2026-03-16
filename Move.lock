@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "6CC4E908294C16CF37EB3D7D1F0122B15CD3F1164528060ED99B757BEBDDD9AF"
+manifest_digest = "203CC3590912425C00D1D41C97B0B83DF2C7A5B262A4CA1C9FA29FCEB8D2F9A1"
 deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
 dependencies = [
   { id = "Iota", name = "Iota" },
@@ -21,6 +21,6 @@ id = "MoveStdlib"
 source = { git = "https://github.com/iotaledger/iota.git", rev = "framework/testnet", subdir = "crates/iota-framework/packages/move-stdlib" }
 
 [move.toolchain-version]
-compiler-version = "1.13.1-rc"
+compiler-version = "1.19.0-alpha"
 edition = "2024.beta"
 flavor = "iota"
