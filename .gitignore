@@ -48,3 +48,6 @@ move-cmtat-threat-model.md
 .claude 
 .opencode/
 .swp
+
+
+node_modules/

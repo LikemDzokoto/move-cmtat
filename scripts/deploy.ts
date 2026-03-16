@@ -8,9 +8,10 @@
  * - Standard CMTAT (9 roles)
  */
 
-import { IotaClient, IotaTransactionBlockResponse } from '@iota/iota-sdk/client';
+import { IotaClient } from '@iota/iota-sdk/client';
 import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519';
-import { TransactionBlock } from '@iota/iota-sdk/transactions';
+import { Transaction } from '@iota/iota-sdk/transactions';
+import { bcs } from '@iota/iota-sdk/bcs';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -69,7 +70,7 @@ class CMTATDeployer {
     }
 
     private getRpcUrl(network: string): string {
-        const urls = {
+        const urls: Record<string, string> = {
             mainnet: 'https://api.mainnet.iota.org:443',
             testnet: 'https://api.testnet.iota.org:443',
             devnet: 'https://api.devnet.iota.org:443',
@@ -120,7 +121,7 @@ class CMTATDeployer {
     }
 
     private async publishPackage(): Promise<string> {
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         
         // Read compiled modules
         const modulesDir = path.join(process.cwd(), 'build', 'move-cmtat', 'bytecode_modules');
@@ -138,12 +139,12 @@ class CMTATDeployer {
         });
 
         // Transfer upgrade capability to sender
-        tx.transferObjects([upgradeCap], tx.pure(this.keypair.getPublicKey().toIotaAddress()));
+        tx.transferObjects([upgradeCap], tx.pure(bcs.string().serialize(this.keypair.getPublicKey().toIotaAddress()).toBytes()));
 
         // Execute transaction
-        const result = await this.client.signAndExecuteTransactionBlock({
+        const result = await this.client.signAndExecuteTransaction({
             signer: this.keypair,
-            transactionBlock: tx,
+            transaction: tx,
             options: {
                 showEffects: true,
                 showObjectChanges: true,
@@ -160,7 +161,7 @@ class CMTATDeployer {
     }
 
     private async initializeToken(packageId: string): Promise<string> {
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         
         // Set recipient to deployer if not specified
         const recipient = this.config.tokenConfig.recipient || 
@@ -173,18 +174,18 @@ class CMTATDeployer {
         tx.moveCall({
             target: `${packageId}::${moduleName}::init_token`,
             arguments: [
-                tx.pure(this.config.tokenConfig.name),
-                tx.pure(this.config.tokenConfig.symbol),
-                tx.pure(this.config.tokenConfig.decimals),
-                tx.pure(this.config.tokenConfig.initialSupply),
-                tx.pure(recipient),
+                tx.pure(bcs.string().serialize(this.config.tokenConfig.name).toBytes()),
+                tx.pure(bcs.string().serialize(this.config.tokenConfig.symbol).toBytes()),
+                tx.pure(bcs.u8().serialize(this.config.tokenConfig.decimals).toBytes()),
+                tx.pure(bcs.u64().serialize(this.config.tokenConfig.initialSupply).toBytes()),
+                tx.pure(bcs.string().serialize(recipient).toBytes()),
             ],
         });
 
         // Execute transaction
-        const result = await this.client.signAndExecuteTransactionBlock({
+        const result = await this.client.signAndExecuteTransaction({
             signer: this.keypair,
-            transactionBlock: tx,
+            transaction: tx,
             options: {
                 showEffects: true,
                 showObjectChanges: true,
@@ -200,16 +201,16 @@ class CMTATDeployer {
         return tokenId;
     }
 
-    private extractPackageId(result: IotaTransactionBlockResponse): string | null {
-        const created = result.objectChanges?.filter(
-            change => change.type === 'published'
+    private extractPackageId(result: any): string | null {
+        const published = result.objectChanges?.filter(
+            (change: any) => change.type === 'published'
         );
-        return created && created.length > 0 ? created[0].packageId : null;
+        return published && published.length > 0 ? published[0].packageId : null;
     }
 
-    private extractTokenId(result: IotaTransactionBlockResponse): string | null {
+    private extractTokenId(result: any): string | null {
         const created = result.objectChanges?.filter(
-            change => change.type === 'created' && change.objectType.includes('CMTAT')
+            (change: any) => change.type === 'created' && change.objectType?.includes('CMTAT')
         );
         return created && created.length > 0 ? created[0].objectId : null;
     }

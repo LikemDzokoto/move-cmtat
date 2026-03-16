@@ -1,6 +1,7 @@
-import { IotaClient, IotaTransactionBlockResponse } from '@iota/iota-sdk/client';
+import { IotaClient } from '@iota/iota-sdk/client';
 import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519';
-import { TransactionBlock } from '@iota/iota-sdk/transactions';
+import { Transaction } from '@iota/iota-sdk/transactions';
+import { bcs } from '@iota/iota-sdk/bcs';
 
 interface InteractConfig {
     network: 'mainnet' | 'testnet' | 'devnet' | 'localnet';
@@ -40,7 +41,7 @@ class TokenInteractor {
     }
 
     private getRpcUrl(network: string): string {
-        const urls = {
+        const urls: Record<string, string> = {
             mainnet: 'https://api.mainnet.iota.org:443',
             testnet: 'https://api.testnet.iota.org:443',
             devnet: 'https://api.devnet.iota.org:443',
@@ -88,12 +89,12 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::mint`,
             arguments: [
-                tx.pure(this.config.recipient),
-                tx.pure(this.config.amount),
+                tx.pure(bcs.string().serialize(this.config.recipient).toBytes()),
+                tx.pure(bcs.u64().serialize(this.config.amount).toBytes()),
             ],
         });
 
@@ -109,19 +110,19 @@ class TokenInteractor {
         }
 
         const coins = await this.getCoins();
-        if (coins.length === 0) {
+        if (coins.data.length === 0) {
             console.log('ERROR: No tokens to burn');
             process.exit(1);
         }
 
-        const total = coins.reduce((sum, c) => sum + Number(c.balance), 0);
+        const total = coins.data.reduce((sum, c) => sum + Number(c.balance), 0);
         if (total < this.config.amount!) {
             console.log(`ERROR: Insufficient balance. Have ${total}, need ${this.config.amount}`);
             process.exit(1);
         }
 
-        const tx = new TransactionBlock();
-        const coin = tx.splitCoins(tx.gas, [tx.pure(this.config.amount)]);
+        const tx = new Transaction();
+        const coin = tx.splitCoins(tx.gas, [tx.pure(bcs.u64().serialize(this.config.amount).toBytes())]);
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::burn`,
             arguments: [coin],
@@ -138,9 +139,9 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new TransactionBlock();
-        const coin = tx.splitCoins(tx.gas, [tx.pure(this.config.amount)]);
-        tx.transferObjects([coin], tx.pure(this.config.recipient));
+        const tx = new Transaction();
+        const coin = tx.splitCoins(tx.gas, [tx.pure(bcs.u64().serialize(this.config.amount).toBytes())]);
+        tx.transferObjects([coin], tx.pure(bcs.string().serialize(this.config.recipient).toBytes()));
 
         const result = await this.executeTx(tx);
         console.log(`✅ Transferred ${this.config.amount} tokens to ${this.config.recipient}`);
@@ -148,7 +149,7 @@ class TokenInteractor {
     }
 
     private async pause(): Promise<void> {
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::pause`,
             arguments: [],
@@ -160,7 +161,7 @@ class TokenInteractor {
     }
 
     private async unpause(): Promise<void> {
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::unpause`,
             arguments: [],
@@ -177,10 +178,10 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::freeze`,
-            arguments: [tx.pure(this.config.address)],
+            arguments: [tx.pure(bcs.string().serialize(this.config.address).toBytes())],
         });
 
         const result = await this.executeTx(tx);
@@ -194,10 +195,10 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::unfreeze`,
-            arguments: [tx.pure(this.config.address)],
+            arguments: [tx.pure(bcs.string().serialize(this.config.address).toBytes())],
         });
 
         const result = await this.executeTx(tx);
@@ -213,12 +214,12 @@ class TokenInteractor {
 
         const roleBytes = this.getRoleBytes(this.config.role);
 
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::grant_role`,
             arguments: [
-                tx.pure(this.config.address),
-                tx.pure(roleBytes),
+                tx.pure(bcs.string().serialize(this.config.address).toBytes()),
+                tx.pure(new Uint8Array(roleBytes)),
             ],
         });
 
@@ -235,12 +236,12 @@ class TokenInteractor {
 
         const roleBytes = this.getRoleBytes(this.config.role);
 
-        const tx = new TransactionBlock();
+        const tx = new Transaction();
         tx.moveCall({
             target: `${this.config.packageId}::${this.config.variant}_cmtat::revoke_role`,
             arguments: [
-                tx.pure(this.config.address),
-                tx.pure(roleBytes),
+                tx.pure(bcs.string().serialize(this.config.address).toBytes()),
+                tx.pure(new Uint8Array(roleBytes)),
             ],
         });
 
@@ -265,12 +266,12 @@ class TokenInteractor {
 
     private async getTokenInfo(): Promise<void> {
         try {
-            const objects = await this.client.getObjectsOwnedByAddress({
-                address: this.config.packageId,
+            const objects = await this.client.getOwnedObjects({
+                owner: this.config.packageId,
             });
 
-            const registry = objects.find(o => 
-                o.type?.includes('Registry') || o.type?.includes('State')
+            const registry = objects.data.find((o: any) => 
+                o.data?.type?.includes('Registry') || o.data?.type?.includes('State')
             );
 
             console.log('Token Info:');
@@ -278,7 +279,7 @@ class TokenInteractor {
             console.log(`   Variant: ${this.config.variant}`);
             
             if (registry) {
-                console.log(`   Registry ID: ${registry.objectId}`);
+                console.log(`   Registry ID: ${registry.data.objectId}`);
             }
 
             const coins = await this.client.getCoins({
@@ -301,10 +302,10 @@ class TokenInteractor {
         });
     }
 
-    private async executeTx(tx: TransactionBlock): Promise<IotaTransactionBlockResponse> {
-        return this.client.signAndExecuteTransactionBlock({
+    private async executeTx(tx: Transaction): Promise<any> {
+        return this.client.signAndExecuteTransaction({
             signer: this.keypair,
-            transactionBlock: tx,
+            transaction: tx,
             options: {
                 showEffects: true,
                 showObjectChanges: true,
