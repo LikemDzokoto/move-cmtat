@@ -20,6 +20,7 @@ interface DeployConfig {
     network: 'mainnet' | 'testnet' | 'devnet' | 'localnet';
     privateKey?: string;
     variant: 'light' | 'allowlist' | 'debt' | 'standard';
+    skipBuild?: boolean;
     tokenConfig: {
         name: string;
         symbol: string;
@@ -88,8 +89,12 @@ class CMTATDeployer {
 
         try {
             // Step 1: Build the package
-            console.log('📦 Building Move package...');
-            await this.buildPackage();
+            if (this.config.skipBuild) {
+                console.log('📦 Skipping build (using existing build artifacts)');
+            } else {
+                console.log('📦 Building Move package...');
+                await this.buildPackage();
+            }
 
             // Step 2: Publish the package
             console.log('\n📤 Publishing package to IOTA...');
@@ -113,10 +118,10 @@ class CMTATDeployer {
     private async buildPackage(): Promise<void> {
         const { execSync } = require('child_process');
         try {
-            execSync('iota move build', { stdio: 'inherit' });
+            execSync('iota move build', { stdio: 'inherit', shell: true });
             console.log('✅ Build successful!');
         } catch (error) {
-            throw new Error('Build failed. Make sure IOTA CLI is installed.');
+            throw new Error('Build failed. Make sure IOTA CLI is installed and in PATH.');
         }
     }
 
@@ -271,6 +276,9 @@ async function main() {
                 break;
             case '--recipient':
                 config.tokenConfig.recipient = args[++i];
+                break;
+            case '--skip-build':
+                config.skipBuild = true;
                 break;
             case '--help':
                 printHelp();
