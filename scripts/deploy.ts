@@ -358,10 +358,10 @@ class CMTATDeployer {
 
     private extractTransactionDigestFromCliOutput(output: string): string | null {
         const patterns = [
-            /Transaction Digest:\s*(0x[a-fA-F0-9]+)/i,
-            /digest:\s*(0x[a-fA-F0-9]+)/i,
-            /tx_digest['"]?:\s*['"]?(0x[a-fA-F0-9]+)['"]?/i,
-            /(0x[a-fA-F0-9]{64})/,
+            /Transaction Digest:\s*([a-zA-Z0-9]+)/i,
+            /digest:\s*([a-zA-Z0-9]+)/i,
+            /tx_digest['"]?:\s*['"]?([a-zA-Z0-9]+)['"]?/i,
+            /Digest:\s*([a-zA-Z0-9]+)/i,
         ];
 
         for (const pattern of patterns) {

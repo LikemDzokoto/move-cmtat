@@ -403,26 +403,7 @@ This project includes automation scripts for deployment and interaction:
 - Proper gas budgets (1B for publish, 500M for function calls)
 - Timeout handling for testnet instability
 
-### Prerequisites
 
-1. **IOTA CLI v1.18.1 (Recommended for testnet):**
-   ```bash
-   # Download from GitHub releases
-   curl -L https://github.com/iotaledger/iota/releases/download/v1.18.1/iota-v1.18.1-linux-x86_64.tgz -o iota.tgz
-   tar -xzf iota.tgz
-   cp iota ~/.cargo/bin/iota
-   
-   # Verify version
-   iota --version
-   # Output: iota 1.18.1-b33d5fe5d0be
-   ```
-
-2. **Node.js dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **SDK Version:** `@iota/iota-sdk@1.10.1` (already in package.json)
 
 ### Deployment Steps
 
@@ -528,7 +509,12 @@ Supported networks:
 
 | Contract | Package ID | Status | IOTAScan |
 |----------|-----------|--------|----------|
-| **move-cmtat** (all variants) | `0x7a482e65a8d9286ee099e1944b138707c27418ca42aba6b3f9aba88359dc46cf` | ✅ Deployed & Verified | [View on IOTAScan](https://iotascan.com/testnet/object/0x7a482e65a8d9286ee099e1944b138707c27418ca42aba6b3f9aba88359dc46cf/contracts) |
+| **move-cmtat** (all variants) | `0x40f7600aaa2417f8541dc8219c4cb065ec38ac3c7539f79aee30eb9add594e0a` | ✅ Deployed & Verified | [View on IOTAScan](https://iotascan.com/testnet/object/0x40f7600aaa2417f8541dc8219c4cb065ec38ac3c7539f79aee30eb9add594e0a/contracts) |
+
+**Transaction Details:**
+- **Network:** testnet
+- **Transaction Digest:** `7vX9YwwKPyQJXH1DMFwXH2fZ27V2KWkgDxfgdoJhD1Ps`
+- **Explorer:** https://explorer.testnet.iota.org/txblock/7vX9YwwKPyQJXH1DMFwXH2fZ27V2KWkgDxfgdoJhD1Ps
 
 
 
