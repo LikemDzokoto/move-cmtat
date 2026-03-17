@@ -483,6 +483,24 @@ Supported networks:
 - `mainnet` - IOTA mainnet
 - `devnet` - IOTA devnet
 
+### ⚠️ Testnet Status Notes
+
+**Current Testnet Issues:**
+
+The IOTA testnet has experienced instability. Before deploying to testnet, check the status at https://status.iota.org
+
+- **API Version Mismatch**: The CLI may show version mismatch (`1.19.0-alpha` vs `1.18.x`). This is normal during release candidate periods.
+- **Timeouts**: Testnet may experience request timeouts. The deployment script handles this gracefully.
+- **Indexer/Explorer**: May be temporarily unavailable. Check status page for current outages.
+
+**Recommendations:**
+
+1. **For Development**: Use `localnet` - it's reliable and fast
+2. **Before Testnet**: Check https://status.iota.org for current status
+3. **SDK Version**: Use `@iota/iota-sdk@1.10.1` to match testnet's API version
+
+If testnet transactions timeout, verify manually on the explorer using the transaction digest returned by the script.
+
 ---
 
 ## CMTAT Compliance

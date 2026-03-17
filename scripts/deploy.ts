@@ -9,9 +9,6 @@
  */
 
 import { IotaClient } from '@iota/iota-sdk/client';
-import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519';
-import { Transaction } from '@iota/iota-sdk/transactions';
-import { bcs } from '@iota/iota-sdk/bcs';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -76,7 +73,7 @@ const defaultConfig: DeployConfig = {
 
 class CMTATDeployer {
     private client: IotaClient;
-    private keypair: Ed25519Keypair;
+    private senderAddress: string;
     private config: DeployConfig;
 
     constructor(config: DeployConfig) {
@@ -86,19 +83,103 @@ class CMTATDeployer {
         const rpcUrl = this.getRpcUrl(config.network);
         this.client = new IotaClient({ url: rpcUrl });
 
-        // Initialize keypair
-        if (config.privateKey) {
-            this.keypair = Ed25519Keypair.fromSecretKey(
-                Buffer.from(config.privateKey, 'hex')
-            );
-        } else {
-            // Generate new keypair if none provided
-            this.keypair = new Ed25519Keypair();
-            console.log('⚠️  Generated new keypair. Save this private key:');
-            console.log(`Private Key: ${Buffer.from(this.keypair.getSecretKey()).toString('hex')}`);
+        // Get CLI's active address
+        this.senderAddress = this.getCliActiveAddress();
+        
+        console.log(`📍 Deployer Address (from CLI): ${this.senderAddress}`);
+    }
+
+    private getCliActiveAddress(): string {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            const output = execSync('bash -l -c "iota client active-address"', execOptions).toString().trim();
+            if (output && output.startsWith('0x')) {
+                return output;
+            }
+        } catch (error) {
+            console.error('Failed to get active address from CLI:', error);
+        }
+        
+        throw new Error('Cannot determine CLI active address. Make sure iota CLI is configured with "iota client switch"');
+    }
+
+    private async ensureWalletFunded(): Promise<void> {
+        if (this.config.network === 'localnet') {
+            console.log('💧 Localnet detected - skipping faucet check');
+            return;
         }
 
-        console.log(`📍 Deployer Address: ${this.keypair.getPublicKey().toIotaAddress()}`);
+        if (this.config.network === 'mainnet') {
+            console.log('💰 Mainnet detected - skipping faucet check');
+            return;
+        }
+
+        console.log(`\n💧 Checking wallet balance on ${this.config.network}...`);
+        
+        const balance = await this.getBalance(this.senderAddress);
+        const minBalance = 1000000000; // 1 IOTA in mist
+        
+        if (balance >= minBalance) {
+            console.log(`   Wallet funded: ${balance} mist`);
+            return;
+        }
+
+        console.log(`   Wallet low on funds: ${balance} mist (need at least ${minBalance} mist)`);
+        
+        if (this.config.network === 'testnet') {
+            console.log('   Requesting faucet funds...');
+            await this.requestFaucet(this.senderAddress);
+            
+            // Wait for faucet and check balance again
+            await this.delay(5000);
+            const newBalance = await this.getBalance(this.senderAddress);
+            console.log(`   New balance: ${newBalance} mist`);
+        }
+    }
+
+    private async getBalance(address: string): Promise<number> {
+        try {
+            const { execSync } = require('child_process');
+            const execOptions = this.getExecOptions();
+            
+            const networkFlag = this.getNetworkFlag();
+            const output = execSync(`bash -l -c "iota client balance ${address} ${networkFlag}"`, execOptions).toString();
+            
+            // Parse balance from output (e.g., "Balance: 1000000000 mist")
+            const match = output.match(/(\d+)\s*mist/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+            
+            // Try alternative format
+            const plainMatch = output.match(/(\d+)/);
+            if (plainMatch) {
+                return parseInt(plainMatch[1], 10);
+            }
+            
+            return 0;
+        } catch (error) {
+            return 0;
+        }
+    }
+
+    private async requestFaucet(address: string): Promise<void> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            // First switch to testnet
+            execSync('bash -l -c "iota client switch --env testnet"', execOptions);
+            
+            // Request faucet
+            const output = execSync(`bash -l -c "iota client faucet ${address}"`, execOptions).toString();
+            console.log(`   Faucet response: ${output.substring(0, 200)}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            console.log(`   Faucet request result: ${output.substring(0, 200)}`);
+        }
     }
 
     private getRpcUrl(network: string): string {
@@ -131,22 +212,35 @@ class CMTATDeployer {
                 await this.buildPackage();
             }
 
+            // Step 1.5: Ensure wallet is funded (testnet only)
+            await this.ensureWalletFunded();
+
             // Step 2: Publish the package
             console.log('\n📤 Publishing package to IOTA...');
-            const packageId = await this.publishPackage();
-            console.log(`✅ Package published: ${packageId}`);
+            const publishResult = await this.publishPackage();
+            
+            if (publishResult.packageId === 'pending') {
+                console.log(`⚠️  Package publish submitted but confirmation pending`);
+                console.log(`   Transaction Digest: ${publishResult.txDigest}`);
+                console.log(`   Please check the explorer to verify if the transaction succeeded`);
+                console.log(`   Once confirmed, you can find the package ID in the transaction effects`);
+                return;
+            }
+            
+            console.log(`✅ Package published: ${publishResult.packageId}`);
 
             // Wait for network to index the package
             console.log('⏳ Waiting for package to be indexed...');
             await this.delay(10000);
             console.log('✅ Package indexed');
 
-            // Step 3: Initialize all variants
-            console.log('\n🎯 Initializing all variants...');
-            const tokenIds = await this.initializeAllTokens(packageId);
+            // Step 3: Note - initialization happens automatically via private init function
+            console.log('\n📝 Note: Token initialization happens automatically on publish');
+            console.log('   Use interact.ts to configure tokens and mint supply');
 
             // Step 4: Display summary
-            this.displaySummary(packageId, tokenIds);
+            const tokenIds: Record<string, string> = {};
+            this.displaySummary(publishResult.packageId, tokenIds, publishResult.txDigest);
 
         } catch (error) {
             console.error('❌ Deployment failed:', error);
@@ -174,7 +268,7 @@ class CMTATDeployer {
         };
     }
 
-    private async publishPackage(): Promise<string> {
+    private async publishPackage(): Promise<{ packageId: string; txDigest: string }> {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         
@@ -182,23 +276,42 @@ class CMTATDeployer {
         
         const networkFlag = this.getNetworkFlag();
         
-        const command = `bash -l -c "iota client publish ${networkFlag} --gas-budget 100000000"`;
+        const command = `bash -l -c "iota client publish ${networkFlag} --gas-budget 1000000000"`;
         
         try {
             const output = execSync(command, execOptions).toString();
 
             const packageId = this.extractPackageIdFromCliOutput(output);
             if (!packageId) {
-                throw new Error('Failed to extract package ID from CLI output');
+                throw new Error('Failed to extract package ID from CLI output. Output: ' + output.substring(0, 500));
             }
 
-            return packageId;
+            const txDigest = this.extractTransactionDigestFromCliOutput(output) || 'unknown';
+            console.log(`   Transaction Digest: ${txDigest}`);
+
+            return { packageId, txDigest };
         } catch (error: any) {
             const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
             const packageId = this.extractPackageIdFromCliOutput(output);
             if (packageId) {
-                return packageId;
+                const txDigest = this.extractTransactionDigestFromCliOutput(output) || 'unknown';
+                console.log(`   Transaction Digest: ${txDigest}`);
+                console.log(`   ⚠️  Transaction may still be processing (timeout on confirmation)`);
+                return { packageId, txDigest };
             }
+            
+            // Check if it's a timeout error but tx might have succeeded
+            if (output.includes('Failed to confirm tx status') || output.includes('timeout')) {
+                const txDigest = this.extractTransactionDigestFromCliOutput(output) || 'unknown';
+                if (txDigest !== 'unknown') {
+                    console.log(`   ⚠️  Transaction submitted but confirmation timed out`);
+                    console.log(`   Tx Digest: ${txDigest}`);
+                    console.log(`   Please verify manually on explorer`);
+                    // Return with unknown packageId - user needs to check
+                    return { packageId: 'pending', txDigest };
+                }
+            }
+            
             throw new Error(`Publish failed: ${output || error.message}`);
         }
     }
@@ -224,9 +337,6 @@ class CMTATDeployer {
     }
 
     private getNetworkFlag(): string {
-        if (this.config.network === 'localnet') {
-            return '--local';
-        }
         return '';
     }
 
@@ -235,6 +345,22 @@ class CMTATDeployer {
             /Published Objects:[\s\S]*?ID:\s*(0x[a-fA-F0-9]+)/,
             /package id:\s*(0x[a-fA-F0-9]+)/i,
             /Package ID:\s*(0x[a-fA-F0-9]+)/i,
+        ];
+
+        for (const pattern of patterns) {
+            const match = output.match(pattern);
+            if (match) {
+                return match[1];
+            }
+        }
+        return null;
+    }
+
+    private extractTransactionDigestFromCliOutput(output: string): string | null {
+        const patterns = [
+            /Transaction Digest:\s*(0x[a-fA-F0-9]+)/i,
+            /digest:\s*(0x[a-fA-F0-9]+)/i,
+            /tx_digest['"]?:\s*['"]?(0x[a-fA-F0-9]+)['"]?/i,
             /(0x[a-fA-F0-9]{64})/,
         ];
 
@@ -276,7 +402,7 @@ class CMTATDeployer {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         
-        const recipient = config.recipient || this.keypair.getPublicKey().toIotaAddress();
+        const recipient = config.recipient || this.senderAddress;
         const moduleName = `${variant}_cmtat`;
         
         const args = [
@@ -287,7 +413,7 @@ class CMTATDeployer {
             recipient
         ].join(' ');
         
-        const command = `bash -l -c "iota client call --package ${packageId} --module ${moduleName} --function init_token --args ${args} --gas-budget 100000000"`;
+        const command = `bash -l -c "iota client call --package ${packageId} --module ${moduleName} --function init_token --args ${args} --gas-budget 500000000"`;
         
         try {
             const output = execSync(command, execOptions).toString();
@@ -325,60 +451,14 @@ class CMTATDeployer {
         return null;
     }
 
-    private async initializeToken(packageId: string, variant: string, config: TokenConfig): Promise<string> {
-        const tx = new Transaction();
-        
-        const recipient = config.recipient || this.keypair.getPublicKey().toIotaAddress();
-        const moduleName = `${variant}_cmtat`;
-
-        tx.moveCall({
-            target: `${packageId}::${moduleName}::init_token`,
-            arguments: [
-                tx.pure(bcs.string().serialize(config.name).toBytes()),
-                tx.pure(bcs.string().serialize(config.symbol).toBytes()),
-                tx.pure(bcs.u8().serialize(config.decimals).toBytes()),
-                tx.pure(bcs.u64().serialize(config.initialSupply).toBytes()),
-                tx.pure(bcs.string().serialize(recipient).toBytes()),
-            ],
-        });
-
-        const result = await this.client.signAndExecuteTransaction({
-            signer: this.keypair,
-            transaction: tx,
-            options: {
-                showEffects: true,
-                showObjectChanges: true,
-            },
-        });
-
-        const tokenId = this.extractTokenId(result);
-        if (!tokenId) {
-            throw new Error('Failed to extract token ID from transaction result');
-        }
-
-        return tokenId;
-    }
-
-    private extractPackageId(result: any): string | null {
-        const published = result.objectChanges?.filter(
-            (change: any) => change.type === 'published'
-        );
-        return published && published.length > 0 ? published[0].packageId : null;
-    }
-
-    private extractTokenId(result: any): string | null {
-        const created = result.objectChanges?.filter(
-            (change: any) => change.type === 'created' && change.objectType?.includes('CMTAT')
-        );
-        return created && created.length > 0 ? created[0].objectId : null;
-    }
-
-    private displaySummary(packageId: string, tokenIds: Record<string, string>): void {
+    private displaySummary(packageId: string, tokenIds: Record<string, string>, txDigest: string): void {
         console.log('\n================================');
         console.log('✅ Deployment Summary');
         console.log('================================');
         console.log(`Network: ${this.config.network}`);
         console.log(`Package ID: ${packageId}`);
+        console.log(`Transaction Digest: ${txDigest}`);
+        console.log(`Explorer: https://explorer.${this.config.network}.iota.org/txblock/${txDigest}`);
         console.log('');
         console.log('Deployed Variants:');
         for (const [variant, tokenId] of Object.entries(tokenIds)) {
