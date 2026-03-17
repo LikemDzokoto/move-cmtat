@@ -396,20 +396,33 @@ This project includes automation scripts for deployment and interaction:
 | `scripts/deploy.ts` | Deploy all 4 CMTAT variants to any network |
 | `scripts/verify.ts` | Verify deployed contracts on-chain + explorer |
 | `scripts/interact.ts` | Token operations (mint, burn, transfer, pause, freeze, roles) |
-| `scripts/deploy.sh` | Bash deployment wrapper script |
+
+**Key Features:**
+- Uses CLI's active address (no keypair generation required)
+- Automatic faucet funding check for testnet deployments
+- Proper gas budgets (1B for publish, 500M for function calls)
+- Timeout handling for testnet instability
 
 ### Prerequisites
 
-1. **IOTA CLI installed:**
+1. **IOTA CLI v1.18.1 (Recommended for testnet):**
    ```bash
-   cargo install iota --locked
+   # Download from GitHub releases
+   curl -L https://github.com/iotaledger/iota/releases/download/v1.18.1/iota-v1.18.1-linux-x86_64.tgz -o iota.tgz
+   tar -xzf iota.tgz
+   cp iota ~/.cargo/bin/iota
+   
+   # Verify version
    iota --version
+   # Output: iota 1.18.1-b33d5fe5d0be
    ```
 
 2. **Node.js dependencies:**
    ```bash
    npm install
    ```
+
+3. **SDK Version:** `@iota/iota-sdk@1.10.1` (already in package.json)
 
 ### Deployment Steps
 
@@ -473,33 +486,57 @@ ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action grant_role --addr
 
 Run `ts-node scripts/interact.ts --help` for all available actions.
 
+### Source Code Verification
+
+Verify that deployed bytecode matches your local source code using the IOTA CLI:
+
+#### Step 1: Record Package Address
+
+```bash
+iota move manage-package \
+  --environment testnet \
+  --network-id 2304aa97 \
+  --original-id <PACKAGE_ID> \
+  --latest-id <PACKAGE_ID> \
+  --version-number 1
+```
+
+#### Step 2: Verify Source Code
+
+```bash
+iota client verify-source .
+```
+
+Expected output: `Source verification succeeded!`
+
+This cryptographically proves the deployed contract matches your source code.
+
 ### Network Configuration
 
 Default testnet RPC: `https://api.testnet.iota.cafe`
 
 Supported networks:
 - `localnet` - Local development
-- `testnet` - IOTA testnet  
+- `testnet` - IOTA testnet (Chain ID: 2304aa97)
 - `mainnet` - IOTA mainnet
 - `devnet` - IOTA devnet
 
-### ⚠️ Testnet Status Notes
 
-**Current Testnet Issues:**
+## Deployed Contracts
 
-The IOTA testnet has experienced instability. Before deploying to testnet, check the status at https://status.iota.org
+### Testnet Deployment
 
-- **API Version Mismatch**: The CLI may show version mismatch (`1.19.0-alpha` vs `1.18.x`). This is normal during release candidate periods.
-- **Timeouts**: Testnet may experience request timeouts. The deployment script handles this gracefully.
-- **Indexer/Explorer**: May be temporarily unavailable. Check status page for current outages.
+| Contract | Package ID | Status | IOTAScan |
+|----------|-----------|--------|----------|
+| **move-cmtat** (all variants) | `0x7a482e65a8d9286ee099e1944b138707c27418ca42aba6b3f9aba88359dc46cf` | ✅ Deployed & Verified | [View on IOTAScan](https://iotascan.com/testnet/object/0x7a482e65a8d9286ee099e1944b138707c27418ca42aba6b3f9aba88359dc46cf/contracts) |
 
-**Recommendations:**
 
-1. **For Development**: Use `localnet` - it's reliable and fast
-2. **Before Testnet**: Check https://status.iota.org for current status
-3. **SDK Version**: Use `@iota/iota-sdk@1.10.1` to match testnet's API version
 
-If testnet transactions timeout, verify manually on the explorer using the transaction digest returned by the script.
+**Deployed Contract Variants:**
+- `light_cmtat` - Minimal compliance token
+- `allowlist_cmtat` - Token with allowlist/KYC support
+- `debt_cmtat` - Token for debt securities
+- `standard_cmtat` - Full-featured compliant token
 
 ---
 

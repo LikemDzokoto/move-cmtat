@@ -17,6 +17,18 @@ build/
 .DS_Store
 Thumbs.db
 
+#iota 
+iota
+iota-data-ingestion
+iota-faucet
+iota-graphql-rpc
+iota-indexer
+iota-node
+iota-v1.18.1.tgz
+move-analyzer
+iota-tool
+
+
 # Logs
 *.log
 
