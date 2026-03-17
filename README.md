@@ -385,6 +385,106 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 
 ---
 
+## Deployment Scripts
+
+This project includes automation scripts for deployment and interaction:
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/setup.sh` | Environment setup - checks IOTA CLI, configures client |
+| `scripts/localnet.sh` | Start local IOTA network with `--watch` mode for auto-restart |
+| `scripts/deploy.ts` | Deploy all 4 CMTAT variants to any network |
+| `scripts/verify.ts` | Verify deployed contracts on-chain + explorer |
+| `scripts/interact.ts` | Token operations (mint, burn, transfer, pause, freeze, roles) |
+| `scripts/deploy.sh` | Bash deployment wrapper script |
+
+### Prerequisites
+
+1. **IOTA CLI installed:**
+   ```bash
+   cargo install iota --locked
+   iota --version
+   ```
+
+2. **Node.js dependencies:**
+   ```bash
+   npm install
+   ```
+
+### Deployment Steps
+
+#### 1. Setup Environment
+```bash
+./scripts/setup.sh
+```
+
+#### 2. Build Move Package
+```bash
+iota move build
+```
+
+#### 3. Start Localnet (Optional)
+
+```bash
+# Start once
+./scripts/localnet.sh
+
+# Or with auto-restart on failure (max 3 retries)
+./scripts/localnet.sh --watch
+```
+
+#### 4. Deploy All Variants
+
+**Option A: With Build**
+```bash
+./node_modules/.bin/tsc scripts/deploy.ts --outDir ./dist --esModuleInterop --module commonjs --target es2020 --skipLibCheck
+/usr/bin/node dist/deploy.js
+```
+
+**Option B: Skip Build (if already built)**
+```bash
+/usr/bin/node dist/deploy.js --skip-build
+```
+
+#### 5. Verify Deployment
+
+```bash
+ts-node scripts/verify.ts --package-id <PACKAGE_ID> --network testnet
+```
+
+#### 6. Interact with Tokens
+
+```bash
+# Mint tokens
+ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action mint --amount 1000 --recipient <ADDRESS>
+
+# Check balance
+ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action balance --address <ADDRESS>
+
+# Pause transfers
+ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action pause
+
+# Freeze address
+ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action freeze --address <ADDRESS>
+
+# Grant role
+ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action grant_role --address <ADDRESS> --role minter
+```
+
+Run `ts-node scripts/interact.ts --help` for all available actions.
+
+### Network Configuration
+
+Default testnet RPC: `https://api.testnet.iota.cafe`
+
+Supported networks:
+- `localnet` - Local development
+- `testnet` - IOTA testnet  
+- `mainnet` - IOTA mainnet
+- `devnet` - IOTA devnet
+
+---
+
 ## CMTAT Compliance
 
 ### Current Compliance: ~85%
@@ -472,4 +572,4 @@ Mozilla Public License 2.0 (MPL-2.0)
 
 *Built with IOTA Move native architecture for compliant securities*
 
-*Version 0.2.1 - Work in Progress (~80% CMTAT Compliant)*
+*Version 0.2.1 - Work in Progress (~85% CMTAT Compliant)*

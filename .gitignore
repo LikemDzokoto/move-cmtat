@@ -50,4 +50,6 @@ move-cmtat-threat-model.md
 .swp
 
 
+dist/
+
 node_modules/

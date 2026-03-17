@@ -25,9 +25,9 @@ class ContractVerifier {
 
     private getRpcUrl(network: string): string {
         const urls: Record<string, string> = {
-            mainnet: 'https://api.mainnet.iota.org:443',
-            testnet: 'https://api.testnet.iota.org:443',
-            devnet: 'https://api.devnet.iota.org:443',
+            mainnet: 'https://api.iota.cafe',
+            testnet: 'https://api.testnet.iota.cafe',
+            devnet: 'https://api.devnet.iota.cafe',
             localnet: 'http://127.0.0.1:9000',
         };
         return urls[network] || urls.testnet;
