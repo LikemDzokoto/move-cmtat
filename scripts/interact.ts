@@ -1,8 +1,3 @@
-import { IotaClient } from '@iota/iota-sdk/client';
-import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519';
-import { Transaction } from '@iota/iota-sdk/transactions';
-import { bcs } from '@iota/iota-sdk/bcs';
-
 interface InteractConfig {
     network: 'mainnet' | 'testnet' | 'devnet' | 'localnet';
     privateKey?: string;
@@ -23,40 +18,134 @@ const defaultConfig: InteractConfig = {
 };
 
 class TokenInteractor {
-    private client: IotaClient;
-    private keypair: Ed25519Keypair;
+    private senderAddress: string;
     private config: InteractConfig;
 
     constructor(config: InteractConfig) {
         this.config = config;
-        this.client = new IotaClient({ url: this.getRpcUrl(config.network) });
+        
+        // Switch to the correct network first
+        this.switchNetwork(config.network);
+        
+        this.senderAddress = this.getCliActiveAddress();
+        console.log(`📍 Signer Address (from CLI): ${this.senderAddress}`);
+    }
 
-        if (config.privateKey) {
-            this.keypair = Ed25519Keypair.fromSecretKey(
-                Buffer.from(config.privateKey, 'hex')
-            );
-        } else {
-            this.keypair = new Ed25519Keypair();
+    private switchNetwork(network: string): void {
+        if (network === 'localnet' || network === 'mainnet') {
+            return;
+        }
+        
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            execSync(`bash -l -c "iota client switch --env ${network}"`, execOptions);
+        } catch (error) {
+            // Ignore if already on the correct network
         }
     }
 
-    private getRpcUrl(network: string): string {
-        const urls: Record<string, string> = {
-            mainnet: 'https://api.iota.cafe',
-            testnet: 'https://api.testnet.iota.cafe',
-            devnet: 'https://api.devnet.iota.cafe',
-            localnet: 'http://127.0.0.1:9000',
+    private getCliActiveAddress(): string {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            const output = execSync('bash -l -c "iota client active-address"', execOptions).toString().trim();
+            if (output && output.startsWith('0x')) {
+                return output;
+            }
+        } catch (error) {
+            console.error('Failed to get active address from CLI:', error);
+        }
+        
+        throw new Error('Cannot determine CLI active address. Make sure iota CLI is configured with "iota client switch"');
+    }
+
+    private getExecOptions(): any {
+        return {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            maxBuffer: 50 * 1024 * 1024,
         };
-        return urls[network] || urls.testnet;
+    }
+
+    private getNetworkFlag(): string {
+        return `--env ${this.config.network}`;
+    }
+
+    private async ensureWalletFunded(): Promise<void> {
+        if (this.config.network === 'localnet' || this.config.network === 'mainnet') {
+            return;
+        }
+
+        console.log(`\n💧 Checking wallet balance on ${this.config.network}...`);
+        
+        const balance = await this.getWalletBalance(this.senderAddress);
+        const minBalance = 1000000000;
+        
+        if (balance >= minBalance) {
+            console.log(`   Wallet funded: ${balance} mist`);
+            return;
+        }
+
+        console.log(`   Wallet low on funds: ${balance} mist (need at least ${minBalance} mist)`);
+        
+        if (this.config.network === 'testnet') {
+            console.log('   Requesting faucet funds...');
+            await this.requestFaucet(this.senderAddress);
+            await this.delay(5000);
+            const newBalance = await this.getWalletBalance(this.senderAddress);
+            console.log(`   New balance: ${newBalance} mist`);
+        }
+    }
+
+    private async getWalletBalance(address: string): Promise<number> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            const output = execSync(`bash -l -c "iota client balance ${address}"`, execOptions).toString();
+            const match = output.match(/(\d+)\s*mist/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+            const plainMatch = output.match(/(\d+)/);
+            if (plainMatch) {
+                return parseInt(plainMatch[1], 10);
+            }
+            return 0;
+        } catch (error) {
+            return 0;
+        }
+    }
+
+    private async requestFaucet(address: string): Promise<void> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            execSync('bash -l -c "iota client switch --env testnet"', execOptions);
+            const output = execSync(`bash -l -c "iota client faucet --address ${address}"`, execOptions).toString();
+            console.log(`   Faucet response: ${output.substring(0, 200)}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            console.log(`   Faucet request result: ${output.substring(0, 200)}`);
+        }
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async run(): Promise<void> {
+        await this.ensureWalletFunded();
+
         console.log('\n🚀 Token Interaction');
         console.log('==================================');
         console.log(`Network: ${this.config.network}`);
         console.log(`Action: ${this.config.action}`);
         console.log(`Package: ${this.config.packageId}`);
-        console.log(`Signer: ${this.keypair.getPublicKey().toIotaAddress()}`);
+        console.log(`Signer: ${this.senderAddress}`);
         console.log('');
 
         const actions: Record<string, () => Promise<void>> = {
@@ -89,18 +178,46 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::mint`,
-            arguments: [
-                tx.pure(bcs.string().serialize(this.config.recipient).toBytes()),
-                tx.pure(bcs.u64().serialize(this.config.amount).toBytes()),
-            ],
-        });
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const args = `${this.config.recipient} ${this.config.amount}`;
+        
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function mint --args ${args} --gas-budget 500000000"`;
 
-        const result = await this.executeTx(tx);
-        console.log(`✅ Minted ${this.config.amount} tokens to ${this.config.recipient}`);
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Minted ${this.config.amount} tokens to ${this.config.recipient}`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Minted ${this.config.amount} tokens to ${this.config.recipient}`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Mint failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
+    }
+
+    private extractTransactionDigest(output: string): string | null {
+        const patterns = [
+            /Transaction Digest:\s*([a-zA-Z0-9]+)/i,
+            /digest:\s*([a-zA-Z0-9]+)/i,
+            /Digest:\s*([a-zA-Z0-9]+)/i,
+        ];
+
+        for (const pattern of patterns) {
+            const match = output.match(pattern);
+            if (match) {
+                return match[1];
+            }
+        }
+        return null;
     }
 
     private async burn(): Promise<void> {
@@ -109,28 +226,30 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const coins = await this.getCoins();
-        if (coins.data.length === 0) {
-            console.log('ERROR: No tokens to burn');
-            process.exit(1);
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const args = `0x${'00'.repeat(32)} ${this.config.amount}`;
+        
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function burn --args ${args} --gas-budget 500000000"`;
+
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Burned ${this.config.amount} tokens`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Burned ${this.config.amount} tokens`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Burn failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
         }
-
-        const total = coins.data.reduce((sum, c) => sum + Number(c.balance), 0);
-        if (total < this.config.amount!) {
-            console.log(`ERROR: Insufficient balance. Have ${total}, need ${this.config.amount}`);
-            process.exit(1);
-        }
-
-        const tx = new Transaction();
-        const coin = tx.splitCoins(tx.gas, [tx.pure(bcs.u64().serialize(this.config.amount).toBytes())]);
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::burn`,
-            arguments: [coin],
-        });
-
-        const result = await this.executeTx(tx);
-        console.log(`✅ Burned ${this.config.amount} tokens`);
-        console.log(`   Digest: ${result.digest}`);
     }
 
     private async transfer(): Promise<void> {
@@ -139,37 +258,77 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new Transaction();
-        const coin = tx.splitCoins(tx.gas, [tx.pure(bcs.u64().serialize(this.config.amount).toBytes())]);
-        tx.transferObjects([coin], tx.pure(bcs.string().serialize(this.config.recipient).toBytes()));
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const command = `bash -l -c "iota client transfer-iota --to ${this.config.recipient} --amount ${this.config.amount} --gas-budget 50000000"`;
 
-        const result = await this.executeTx(tx);
-        console.log(`✅ Transferred ${this.config.amount} tokens to ${this.config.recipient}`);
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Transferred ${this.config.amount} IOTA to ${this.config.recipient}`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Transferred ${this.config.amount} IOTA to ${this.config.recipient}`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Transfer failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
     }
 
     private async pause(): Promise<void> {
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::pause`,
-            arguments: [],
-        });
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function pause --gas-budget 500000000"`;
 
-        const result = await this.executeTx(tx);
-        console.log('✅ Token transfers paused');
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log('✅ Token transfers paused');
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log('✅ Token transfers paused');
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Pause failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
     }
 
     private async unpause(): Promise<void> {
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::unpause`,
-            arguments: [],
-        });
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function unpause --gas-budget 500000000"`;
 
-        const result = await this.executeTx(tx);
-        console.log('✅ Token transfers unpaused');
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log('✅ Token transfers unpaused');
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log('✅ Token transfers unpaused');
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Unpause failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
     }
 
     private async freeze(): Promise<void> {
@@ -178,15 +337,28 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::freeze`,
-            arguments: [tx.pure(bcs.string().serialize(this.config.address).toBytes())],
-        });
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function freeze --args ${this.config.address} --gas-budget 500000000"`;
 
-        const result = await this.executeTx(tx);
-        console.log(`✅ Froze address ${this.config.address}`);
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Froze address ${this.config.address}`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Froze address ${this.config.address}`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Freeze failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
     }
 
     private async unfreeze(): Promise<void> {
@@ -195,15 +367,28 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::unfreeze`,
-            arguments: [tx.pure(bcs.string().serialize(this.config.address).toBytes())],
-        });
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function unfreeze --args ${this.config.address} --gas-budget 500000000"`;
 
-        const result = await this.executeTx(tx);
-        console.log(`✅ Unfroze address ${this.config.address}`);
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Unfroze address ${this.config.address}`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Unfroze address ${this.config.address}`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Unfreeze failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
     }
 
     private async grantRole(): Promise<void> {
@@ -212,20 +397,36 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const roleBytes = this.getRoleBytes(this.config.role);
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        const moduleName = `${this.config.variant}_cmtat`;
+        const roleMap: Record<string, string> = {
+            admin: 'DEFAULT_ADMIN_ROLE',
+            minter: 'MINTER_ROLE',
+            pauser: 'PAUSER_ROLE',
+            enforcer: 'ENFORCER_ROLE',
+        };
+        const roleName = roleMap[this.config.role.toLowerCase()] || this.config.role.toUpperCase();
+        
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function grant_role --args ${this.config.address} ${roleName} --gas-budget 500000000"`;
 
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::grant_role`,
-            arguments: [
-                tx.pure(bcs.string().serialize(this.config.address).toBytes()),
-                tx.pure(new Uint8Array(roleBytes)),
-            ],
-        });
-
-        const result = await this.executeTx(tx);
-        console.log(`✅ Granted ${this.config.role} to ${this.config.address}`);
-        console.log(`   Digest: ${result.digest}`);
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Granted ${this.config.role} to ${this.config.address}`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Granted ${this.config.role} to ${this.config.address}`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Grant role failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
     }
 
     private async revokeRole(): Promise<void> {
@@ -234,96 +435,94 @@ class TokenInteractor {
             process.exit(1);
         }
 
-        const roleBytes = this.getRoleBytes(this.config.role);
-
-        const tx = new Transaction();
-        tx.moveCall({
-            target: `${this.config.packageId}::${this.config.variant}_cmtat::revoke_role`,
-            arguments: [
-                tx.pure(bcs.string().serialize(this.config.address).toBytes()),
-                tx.pure(new Uint8Array(roleBytes)),
-            ],
-        });
-
-        const result = await this.executeTx(tx);
-        console.log(`✅ Revoked ${this.config.role} from ${this.config.address}`);
-        console.log(`   Digest: ${result.digest}`);
-    }
-
-    private async getBalance(): Promise<void> {
-        const address = this.config.address || this.keypair.getPublicKey().toIotaAddress();
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
         
-        const coins = await this.client.getCoins({
-            owner: address,
-        });
-
-        const total = coins.data.reduce((sum, c) => sum + Number(c.balance), 0);
-        
-        console.log(`Balance for ${address}:`);
-        console.log(`   Total: ${total}`);
-        console.log(`   Coin count: ${coins.data.length}`);
-    }
-
-    private async getTokenInfo(): Promise<void> {
-        try {
-            const objects = await this.client.getOwnedObjects({
-                owner: this.config.packageId,
-            });
-
-            const registry = objects.data.find((o: any) => 
-                o.data?.type?.includes('Registry') || o.data?.type?.includes('State')
-            );
-
-            console.log('Token Info:');
-            console.log(`   Package ID: ${this.config.packageId}`);
-            console.log(`   Variant: ${this.config.variant}`);
-            
-            if (registry) {
-                console.log(`   Registry ID: ${registry.data.objectId}`);
-            }
-
-            const coins = await this.client.getCoins({
-                owner: this.config.packageId,
-                coinType: `${this.config.packageId}::${this.config.variant}_cmtat::${this.config.variant.toUpperCase()}_CMTAT`,
-            });
-
-            if (coins.data.length > 0) {
-                console.log(`   Treasury: ${coins.data[0].balance}`);
-            }
-        } catch (error) {
-            console.log('Error fetching token info:', error);
-        }
-    }
-
-    private async getCoins() {
-        return this.client.getCoins({
-            owner: this.keypair.getPublicKey().toIotaAddress(),
-            coinType: `${this.config.packageId}::${this.config.variant}_cmtat::${this.config.variant.toUpperCase()}_CMTAT`,
-        });
-    }
-
-    private async executeTx(tx: Transaction): Promise<any> {
-        return this.client.signAndExecuteTransaction({
-            signer: this.keypair,
-            transaction: tx,
-            options: {
-                showEffects: true,
-                showObjectChanges: true,
-            },
-        });
-    }
-
-    private getRoleBytes(role: string): number[] {
-        const roles: Record<string, string> = {
+        const moduleName = `${this.config.variant}_cmtat`;
+        const roleMap: Record<string, string> = {
             admin: 'DEFAULT_ADMIN_ROLE',
             minter: 'MINTER_ROLE',
             pauser: 'PAUSER_ROLE',
             enforcer: 'ENFORCER_ROLE',
-            default_admin: 'DEFAULT_ADMIN_ROLE',
         };
+        const roleName = roleMap[this.config.role.toLowerCase()] || this.config.role.toUpperCase();
+        
+        const command = `bash -l -c "iota client call --package ${this.config.packageId} --module ${moduleName} --function revoke_role --args ${this.config.address} ${roleName} --gas-budget 500000000"`;
 
-        const roleName = roles[role.toLowerCase()] || role.toUpperCase();
-        return Array.from(Buffer.from(roleName));
+        try {
+            const output = execSync(command, execOptions).toString();
+            const txDigest = this.extractTransactionDigest(output);
+            console.log(`✅ Revoked ${this.config.role} from ${this.config.address}`);
+            console.log(`   Digest: ${txDigest}`);
+        } catch (error: any) {
+            const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
+            const txDigest = this.extractTransactionDigest(output);
+            if (txDigest) {
+                console.log(`✅ Revoked ${this.config.role} from ${this.config.address}`);
+                console.log(`   Digest: ${txDigest}`);
+            } else {
+                console.log(`❌ Revoke role failed: ${output.substring(0, 500)}`);
+                process.exit(1);
+            }
+        }
+    }
+
+    private async getBalance(): Promise<void> {
+        const address = this.config.address || this.senderAddress;
+        
+        const balance = await this.getBalanceValue(address);
+        
+        console.log(`Balance for ${address}:`);
+        console.log(`   Total: ${balance} mist`);
+    }
+
+    private async getBalanceValue(address: string): Promise<number> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            const output = execSync(`bash -l -c "iota client balance ${address}"`, execOptions).toString();
+            const match = output.match(/(\d+)\s*mist/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+            const plainMatch = output.match(/Total: (\d+)/);
+            if (plainMatch) {
+                return parseInt(plainMatch[1], 10);
+            }
+            return 0;
+        } catch (error) {
+            return 0;
+        }
+    }
+
+    private async getTokenInfo(): Promise<void> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        
+        try {
+            console.log('Token Info:');
+            console.log(`   Package ID: ${this.config.packageId}`);
+            console.log(`   Variant: ${this.config.variant}`);
+            
+            const output = execSync(`bash -l -c "iota client objects ${this.config.packageId}"`, execOptions).toString();
+            
+            if (output.includes('TreasuryCap')) {
+                const match = output.match(/TreasuryCap<([^>]+)>/);
+                if (match) {
+                    console.log(`   Coin Type: ${match[1]}`);
+                }
+            }
+            
+            if (output.includes('AdminCap')) {
+                console.log(`   Status: Admin capabilities present`);
+            }
+            
+            console.log(`   Use "iota client objects ${this.senderAddress}" to see owned coins`);
+            
+        } catch (error) {
+            console.log('Error fetching token info:', error);
+        }
     }
 }
 
@@ -387,19 +586,20 @@ function printHelp() {
 Move CMTAT Token Interaction
 
 Usage:
-  ts-node interact.ts [options]
+  /usr/bin/node dist/interact.js [options]
 
 Options:
   --package-id <id>    Package ID (required)
   --action <action>   Action to perform (required)
   --network <net>     Network (mainnet|testnet|devnet|localnet)
-  --private-key <key> Private key (hex)
   --variant <var>     Variant (light|allowlist|debt|standard)
   --amount <n>        Amount for mint/burn/transfer
   --recipient <addr>  Recipient address
   --address <addr>    Address for freeze/role operations
   --role <role>       Role for grant/revoke (admin|minter|pauser|enforcer)
   --help              Show this help
+
+Note: Uses CLI's active address automatically. No private key needed.
 
 Actions:
   mint          Mint new tokens (requires --amount, --recipient)
@@ -415,10 +615,10 @@ Actions:
   info          Get token info
 
 Examples:
-  ts-node interact.ts --package-id 0x123... --action mint --amount 1000 --recipient 0x456...
-  ts-node interact.ts --package-id 0x123... --action balance --address 0x456...
-  ts-node interact.ts --package-id 0x123... --action pause
-  ts-node interact.ts --package-id 0x123... --action freeze --address 0x456...
+  /usr/bin/node dist/interact.js --package-id 0x123... --action mint --amount 1000 --recipient 0x456...
+  /usr/bin/node dist/interact.js --package-id 0x123... --action balance --address 0x456...
+  /usr/bin/node dist/interact.js --package-id 0x123... --action pause
+  /usr/bin/node dist/interact.js --package-id 0x123... --action freeze --address 0x456...
     `);
 }
 
