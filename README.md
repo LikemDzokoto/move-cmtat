@@ -514,7 +514,6 @@ Supported networks:
 **Transaction Details:**
 - **Network:** testnet
 - **Transaction Digest:** `7vX9YwwKPyQJXH1DMFwXH2fZ27V2KWkgDxfgdoJhD1Ps`
-- **Explorer:** https://explorer.testnet.iota.org/txblock/7vX9YwwKPyQJXH1DMFwXH2fZ27V2KWkgDxfgdoJhD1Ps
 
 
 
