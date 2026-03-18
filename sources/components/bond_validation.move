@@ -76,7 +76,7 @@ module move_cmtat::bond_validation {
         let days = days_between(start_date, end_date);
         
         // Determine actual days in year for the period
-        // Simplified: use 365 for now, could be enhanced for leap year detection
+        //  use 365 for now, could be enhanced for leap year detection
         let year_days = if (is_leap_year_in_period(start_date, end_date)) {
             DAYS_366
         } else {
@@ -231,7 +231,7 @@ module move_cmtat::bond_validation {
     }
 
     /// Check if timestamp falls in a leap year
-    /// Simplified: assumes timestamp is Unix epoch seconds
+    /// assumes timestamp is Unix epoch seconds
     public fun is_leap_year_timestamp(timestamp: u64): bool {
         let year = timestamp_to_year(timestamp);
         is_leap_year(year)
@@ -259,7 +259,7 @@ module move_cmtat::bond_validation {
     }
 
     /// Convert timestamp to year (approximate)
-    /// Note: This is simplified and doesn't account for exact leap year calculations
+    /// this doesn't account for exact leap year calculations
     fun timestamp_to_year(timestamp: u64): u64 {
         // Unix epoch starts at 1970
         // Average seconds per year accounting for leap years
@@ -271,7 +271,7 @@ module move_cmtat::bond_validation {
     
     /// Adjust date for business day convention
     /// Note: Full implementation would need external oracle for business days
-    /// This is a simplified version
+    
     public fun adjust_for_business_day(
         date: u64,
         convention: &BusinessDayConvention
@@ -288,10 +288,9 @@ module move_cmtat::bond_validation {
         }
     }
 
-    /// Adjust to next business day (simplified)
+    /// Adjust to next business day 
     fun adjust_following(date: u64): u64 {
-        // Simplified: add days to avoid weekends
-        // In production, this would check actual business calendar
+        //  add days to avoid weekends this would check actual business calendar
         let day_of_week = day_of_week(date);
         
         if (day_of_week == 0) {
@@ -303,7 +302,7 @@ module move_cmtat::bond_validation {
         }
     }
 
-    /// Adjust to next business day, but not next month (simplified)
+    /// Adjust to next business day, but not next month 
     fun adjust_modified_following(date: u64): u64 {
         let adjusted = adjust_following(date);
         
@@ -316,7 +315,7 @@ module move_cmtat::bond_validation {
         }
     }
 
-    /// Adjust to previous business day (simplified)
+    /// Adjust to previous business day 
     fun adjust_preceding(date: u64): u64 {
         let day_of_week = day_of_week(date);
         

@@ -27,7 +27,7 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 
 ## Current Implementation Status
 
-### ✅ Production-Ready Components
+
 
 **Core Token Infrastructure:**
 - Native IOTA `Coin<T>` integration for user balances

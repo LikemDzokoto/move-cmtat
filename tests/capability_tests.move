@@ -1,3 +1,4 @@
+/// This module contains comprehensive tests for the capability system of the CMTAT contracts.
 #[test_only]
 #[allow(unused_use)]
 module move_cmtat::capability_tests {
@@ -6,14 +7,12 @@ module move_cmtat::capability_tests {
     use iota::coin::{Self, TreasuryCap, DenyCapV1};
     use iota::deny_list::{Self, DenyList};
 
-    // Import Light CMTAT
     use move_cmtat::light_cmtat::{Self, LIGHT_CMTAT, LightCMTATRegistry, 
                                    AdminCap as LightAdminCap, 
                                    MinterCap as LightMinterCap, 
                                    PauserCap as LightPauserCap, 
                                    EnforcerCap as LightEnforcerCap};
 
-    // Import Standard CMTAT
     use move_cmtat::standard_cmtat::{Self, STANDARD_CMTAT, CMTATRegistry as StandardRegistry, StandardCMTATState,
                                      AdminCap as StandardAdminCap, 
                                      MintCap as StandardMintCap, 
@@ -22,7 +21,6 @@ module move_cmtat::capability_tests {
                                      SnapshotCap as StandardSnapshotCap, 
                                      EnforcerCap as StandardEnforcerCap};
 
-    // Import Debt CMTAT
     use move_cmtat::debt_cmtat::{Self, DEBT_CMTAT, CMTATRegistry as DebtRegistry, DebtCMTATState as DebtState,
                                  AdminCap as DebtAdminCap, 
                                  MintCap as DebtMintCap, 
@@ -32,7 +30,6 @@ module move_cmtat::capability_tests {
                                  DebtCap, 
                                  EnforcerCap as DebtEnforcerCap};
 
-    // Import Allowlist CMTAT
     use move_cmtat::allowlist_cmtat::{Self, ALLOWLIST_CMTAT, CMTATRegistry as AllowlistRegistry, ComplianceState as AllowlistComplianceState,
                                       AdminCap as AllowlistAdminCap, 
                                       MintCap as AllowlistMintCap, 
@@ -103,8 +100,6 @@ module move_cmtat::capability_tests {
     // SECTION 1: LIGHT CMTAT CAPABILITY TESTS
     // ============================================
 
-    // 1.1 Positive: Admin grants minter successfully
-    // 1.1 Positive: Admin grants minter successfully (with TreasuryCap transfer)
     #[test]
     fun test_light_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -133,7 +128,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.2 Positive: Admin grants pauser successfully (with DenyCap transfer)
     #[test]
     fun test_light_admin_grants_pauser_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -162,7 +156,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.3 Positive: Admin grants enforcer successfully (with DenyCap transfer)
     #[test]
     fun test_light_admin_grants_enforcer_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -191,7 +184,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.4 Positive: Granted minter can actually mint (now USER1 has TreasuryCap!)
     #[test]
     fun test_light_granted_minter_can_mint() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -232,7 +224,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.5 Positive: Granted pauser can actually pause (now USER1 has DenyCap!)
     #[test]
     fun test_light_granted_pauser_can_pause() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -271,7 +262,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.16 Complex: Grant minter capability
     #[test]
     fun test_light_grant_minter_capability() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -300,7 +290,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.17 Complex: Capability transfer workflow (verify grant works)
     #[test]
     fun test_light_capability_transfer_workflow() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -327,7 +316,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.18 Complex: Grant pauser capability
     #[test]
     fun test_light_grant_pauser_capability() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -358,7 +346,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.19 Complex: Grant enforcer capability
     #[test]
     fun test_light_grant_enforcer_capability() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -387,7 +374,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.20 Complex: Granted capabilities independent (simplified - grant to one user)
     #[test]
     fun test_light_granted_capabilities_independent() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -416,7 +402,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 1.21 Complex: Original admin retains access after granting
     #[test]
     fun test_light_original_admin_retains_access_after_granting() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -450,10 +435,9 @@ module move_cmtat::capability_tests {
     }
 
     // ============================================
-    // SECTION 2: STANDARD CMTAT CAPABILITY TESTS (25 tests)
+    // SECTION 2: STANDARD CMTAT CAPABILITY TESTS 
     // ============================================
 
-    // 2.1 Positive: Admin grants minter capability
     #[test]
     fun test_standard_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -478,7 +462,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.2 Positive: Admin grants burner capability
     #[test]
     fun test_standard_admin_grants_burner_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -503,7 +486,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.3 Positive: Admin grants pauser capability
     #[test]
     fun test_standard_admin_grants_pauser_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -528,7 +510,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.4 Positive: Admin grants enforcer capability
     #[test]
     fun test_standard_admin_grants_enforcer_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -553,7 +534,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.5 Positive: Admin grants snapshooter capability
     #[test]
     fun test_standard_admin_grants_snapshooter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -577,7 +557,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.6-2.10 Positive: Granted capabilities work (now with TreasuryCap transfer!)
     #[test]
     fun test_standard_granted_minter_can_mint() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -738,19 +717,15 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 2.11-2.25 SECURITY NOTE: Capability Grant Authorization
     // 
     // The following security properties are enforced by Move's type system at compile time:
     //
-    // 1. ONLY AdminCap can be used with grant_* functions
     //    - Attempting to pass MintCap, BurnCap, PauseCap, etc. results in compile error
     //    - Example: standard_cmtat::grant_minter(&mint_cap, ...) // COMPILE ERROR
     //
-    // 2. Cross-capability grants are prevented
     //    - MinterCap cannot grant BurnerCap, PauseCap, etc.
     //    - Each grant function requires &AdminCap specifically
     //
-    // 3. Cross-contract capability isolation
     //    - LightAdminCap cannot be used with standard_cmtat functions
     //    - Each contract has distinct capability types
     //
@@ -784,10 +759,9 @@ module move_cmtat::capability_tests {
     }
 
     // ============================================
-    // SECTION 3: DEBT CMTAT CAPABILITY TESTS (20 tests)
+    // DEBT CMTAT CAPABILITY TESTS 
     // ====================================
 
-    // 3.1 Positive: Admin grants minter
     #[test]
     fun test_debt_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -806,7 +780,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.2 Positive: Admin grants burner
     #[test]
     fun test_debt_admin_grants_burner_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -825,7 +798,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.3 Positive: Admin grants pauser
     #[test]
     fun test_debt_admin_grants_pauser_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -844,7 +816,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.4 Positive: Admin grants enforcer
     #[test]
     fun test_debt_admin_grants_enforcer_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -863,7 +834,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.5 Positive: Admin grants snapshooter (no cap needed)
     #[test]
     fun test_debt_admin_grants_snapshooter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -881,7 +851,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.6 Positive: Admin grants debt manager
     #[test]
     fun test_debt_admin_grants_debt_manager_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -900,7 +869,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.7-3.13 Positive: Granted capabilities work (now with TreasuryCap transfer!)
     #[test]
     fun test_debt_granted_minter_can_mint() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -979,17 +947,15 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 3.14-3.20 SECURITY NOTE: Debt capability authorization
     // 
     // Move's type system enforces that only DebtAdminCap can call grant_* functions.
     // Attempting to use DebtMintCap, DebtCap, etc. results in compile-time errors.
     // This provides compile-time security guarantees stronger than runtime checks.
 
     // ============================================
-    // SECTION 4: ALLOWLIST CMTAT CAPABILITY TESTS (20 tests)
+    //  ALLOWLIST CMTAT CAPABILITY TESTS 
     // ============================================
 
-    // 4.1-4.6 Positive: Admin grants all 6 capabilities
     #[test]
     fun test_allowlist_admin_grants_minter_success() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1097,7 +1063,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 4.7-4.13 Positive: Granted capabilities work
     #[test]
     fun test_allowlist_granted_allowlist_manager_can_enable_allowlist() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1151,17 +1116,15 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 4.14-4.20 SECURITY NOTE: Allowlist capability authorization
     //
     // Only AllowlistAdminCap can call grant_* functions in the allowlist contract.
     // Move's type system prevents any other capability type from being used,
     // ensuring compile-time security enforcement.
 
     // ============================================
-    // SECTION 5: CROSS-CONTRACT CAPABILITY TESTS (10 tests)
+    //  CROSS-CONTRACT CAPABILITY TESTS 
     // ============================================
 
-    // 5.1-5.4 Verify capabilities are contract-specific (cannot use across contracts)
     #[test]
     fun test_capability_type_isolation_across_contracts() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1190,7 +1153,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 5.5-5.10 SECURITY NOTE: Cross-contract type isolation
     //
     // Each contract has distinct capability types:
     // - LightAdminCap != StandardAdminCap != DebtAdminCap != AllowlistAdminCap
@@ -1203,7 +1165,6 @@ module move_cmtat::capability_tests {
     // SECTION 6: COMPLEX AUTHORIZATION SCENARIOS (10 tests)
     // ============================================
 
-    // 6.1 Capability transfer chain
     #[test]
     fun test_capability_transfer_chain_admin_to_a_to_b() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1229,7 +1190,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 6.2 User with multiple capabilities can use all
     #[test]
     fun test_user_with_multiple_capabilities_can_use_all() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1255,7 +1215,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 6.3 Grant capability to user
     #[test]
     fun test_grant_capability_to_user() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1281,7 +1240,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 6.4 Original admin retains full access
     #[test]
     fun test_original_admin_retains_full_access() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1312,7 +1270,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 6.5-6.10 Additional complex scenarios
     #[test]
     fun test_capability_granting_persists_across_transactions() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1347,10 +1304,9 @@ module move_cmtat::capability_tests {
     }
 
     // ============================================
-    // SECTION 7: EDGE CASES & SECURITY TESTS (5 tests)
+    //  EDGE CASES & SECURITY TESTS 
     // ============================================
 
-    // 7.1 Grant to self
     #[test]
     fun test_admin_can_grant_to_self() {
         let mut scenario_val = test_scenario::begin(ADMIN);
@@ -1376,7 +1332,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 7.2-7.3 Security tests demonstrating type safety
     // Note: The following scenarios are prevented by Move's type system at compile time:
     // - Using MintCap where AdminCap is expected (compile error)
     // - Using LightAdminCap with standard_cmtat (compile error)
@@ -1387,9 +1342,6 @@ module move_cmtat::capability_tests {
     fun test_capability_type_safety_demonstrated() {
         // This test documents that Move's type system prevents capability misuse
         // The compiler enforces that:
-        // 1. Only AdminCap can be used for grant_* functions
-        // 2. Each contract has distinct capability types
-        // 3. Capabilities cannot be forged or confused across contracts
         // 
         // Attempts to use wrong capability types result in compile-time errors,
         // which is stronger protection than runtime checks.
@@ -1417,7 +1369,6 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // 7.4-7.5 Additional security tests
     #[test]
     fun test_capability_type_safety_enforced_by_compiler() {
         // This test verifies that the Move compiler enforces type safety
@@ -1438,15 +1389,5 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // ============================================
-    // FINAL TEST COUNT: 75+ comprehensive tests
-    // ============================================
-    // Light CMTAT: 20 tests
-    // Standard CMTAT: 25 tests  
-    // Debt CMTAT: 15 tests
-    // Allowlist CMTAT: 15 tests
-    // Cross-contract: 10 tests
-    // Complex scenarios: 10 tests
-    // Edge cases: 5 tests
-    // TOTAL: 100+ tests
 }
+
