@@ -78,7 +78,7 @@ display_status() {
     echo "Next steps:"
     echo "  1. Start localnet:  ./scripts/localnet.sh"
     echo "  2. Fund account:   iota client faucet"
-    echo "  3. Deploy:         ./scripts/deploy.sh"
+   
 }
 
 check_iota_installation

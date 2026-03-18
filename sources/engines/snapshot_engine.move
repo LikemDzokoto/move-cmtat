@@ -215,7 +215,7 @@ module move_cmtat::snapshot_engine {
         let _balance_table = table::borrow(&engine.balances, snapshot_id);
         let accounts = vector::empty<address>();
         
-        // Note: IOTA tables don't support iteration, so this is limited
+        //  IOTA tables don't support iteration, so this is limited
         // In practice, accounts would be tracked separately
         accounts
     }

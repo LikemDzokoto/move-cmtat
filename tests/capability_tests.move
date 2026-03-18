@@ -1332,7 +1332,7 @@ module move_cmtat::capability_tests {
         test_scenario::end(scenario_val);
     }
 
-    // Note: The following scenarios are prevented by Move's type system at compile time:
+    //  The following scenarios are prevented by Move's type system at compile time:
     // - Using MintCap where AdminCap is expected (compile error)
     // - Using LightAdminCap with standard_cmtat (compile error)
     // - Cross-contract capability type confusion (compile error)
