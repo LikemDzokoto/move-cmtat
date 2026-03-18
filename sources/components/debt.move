@@ -6,17 +6,17 @@ module move_cmtat::debt {
     use std::string::{Self, String};
     use iota::object;
 
-    // ========== CONSTANTS ==========
+
     
     /// Fixed-point multiplier for interest rates (6 decimals)
     /// Rate of 5.25% = 5,250,000
     const INTEREST_RATE_MULTIPLIER: u64 = 1_000_000;
     
-    /// Day count denominators
+
     const DAYS_360: u64 = 360;
     const DAYS_365: u64 = 365;
 
-    // ========== ERRORS ==========
+
     
     const EDebtInDefault: u64 = 400;
     const EAlreadyRedeemed: u64 = 401;
@@ -24,14 +24,14 @@ module move_cmtat::debt {
     const EInvalidMaturityDate: u64 = 403;
     const EInvalidInterestRate: u64 = 404;
 
-    // ========== ENUMS ==========
+
     
     /// Day count conventions for interest calculations
     public enum DayCountConvention has copy, drop, store {
-        Thirty360,        // 30/360 convention
-        Actual360,        // Actual/360 convention
-        Actual365,        // Actual/365 convention
-        ActualActual,     // Actual/Actual convention
+        Thirty360,
+        Actual360,
+        Actual365,
+        ActualActual,
     }
 
     /// Business day conventions for date adjustments
@@ -39,7 +39,7 @@ module move_cmtat::debt {
         Following,           // Move to next business day
         ModifiedFollowing,   // Move to next, but not next month
         Preceding,          // Move to previous business day
-        Unadjusted,         // No adjustment
+        Unadjusted,
     }
 
     // ========== DAY COUNT CONVENTION CONSTANTS ==========
@@ -55,7 +55,7 @@ module move_cmtat::debt {
     const BDC_PRECEDING: u8 = 2;
     const BDC_UNADJUSTED: u8 = 3;
 
-    // ========== ENUM CONVERSION FUNCTIONS ==========
+
 
     /// Convert DayCountConvention to u8 constant
     public fun day_count_to_u8(convention: &DayCountConvention): u8 {
@@ -103,7 +103,7 @@ module move_cmtat::debt {
         }
     }
 
-    // ========== CONSTANT GETTERS ==========
+
     /// Getters for day count constants (for external modules)
     
     public fun day_count_thirty360(): u8 { DAY_COUNT_THIRTY360 }
@@ -118,40 +118,40 @@ module move_cmtat::debt {
     public fun bdc_preceding(): u8 { BDC_PRECEDING }
     public fun bdc_unadjusted(): u8 { BDC_UNADJUSTED }
 
-    // ========== DATA STRUCTURES ==========
+
     
     /// DebtIdentifier - Entity identification for regulatory compliance
     /// Contains LEI, ISIN, and entity information
     public struct DebtIdentifier has copy, drop, store {
         issuer_name: String,                    // LEI or entity name
-        issuer_description: String,             // Detailed description
+        issuer_description: String,
         guarantor: String,                      // LEI/UID of guarantor (if applicable)
-        debt_holder_representative: String,     // Debtholder representative identifier
+        debt_holder_representative: String,
         isin: String,                           // ISIN or other security identifier
     }
 
     /// DebtInstrument - Complete bond instrument specification
     /// All terms and conditions of the debt security
     public struct DebtInstrument has copy, drop, store {
-        // Core bond terms
+
         interest_rate: u64,                     // Fixed-point: rate * INTEREST_RATE_MULTIPLIER
         par_value: u64,                         // Face value per bond
-        minimum_denomination: u64,              // Minimum tradable amount
+        minimum_denomination: u64,
         
         // Dates (Unix timestamps in seconds)
         issuance_date: u64,
         maturity_date: u64,
         
-        // Payment terms
+
         coupon_frequency: String,               // "ANNUAL", "SEMI_ANNUAL", "QUARTERLY", "MONTHLY"
-        interest_schedule_format: String,       // Format description
+        interest_schedule_format: String,
         interest_payment_date: String,          // Description or specific date
         
-        // Conventions
+
         day_count_convention: DayCountConvention,
         business_day_convention: BusinessDayConvention,
         
-        // Currency
+
         currency: String,                       // ISO 4217 code (e.g., "USD", "EUR")
         currency_contract: address,             // Address of currency token contract
     }
@@ -159,8 +159,8 @@ module move_cmtat::debt {
     /// CreditEvents - Structured credit event tracking
     /// Tracks default, redemption, maturity, and rating status
     public struct CreditEvents has copy, drop, store {
-        flag_default: bool,                     // Default event occurred
-        flag_redeemed: bool,                    // Bond fully redeemed
+        flag_default: bool,
+        flag_redeemed: bool,
         flag_matured: bool,                     // Bond reached maturity date
         rating: String,                         // Current credit rating (e.g., "AAA", "BB+")
         principal_distributed: u64,             // Total principal distributed to holders
@@ -172,7 +172,7 @@ module move_cmtat::debt {
     public struct BondTerms has copy, drop, store {
         call_schedule: String,                  // Call provisions (if any)
         put_schedule: String,                   // Put provisions (if any)
-        sinking_fund_schedule: String,          // Sinking fund provisions
+        sinking_fund_schedule: String,
         convertible_terms: String,              // Conversion terms (if convertible)
         collateral_description: String,         // Collateral backing the bond
     }
@@ -182,13 +182,13 @@ module move_cmtat::debt {
     public struct DebtState has key, store {
         id: object::UID,
         
-        // Structured debt information
+
         identifier: DebtIdentifier,
         instrument: DebtInstrument,
         terms: BondTerms,
         credit_events: CreditEvents,
         
-        // DebtEngine integration
+
         debt_engine: address,                   // External engine address (0x0 if disabled)
         use_external_engine: bool,              // Toggle for external vs internal storage
         
@@ -197,7 +197,7 @@ module move_cmtat::debt {
         credit_events_legacy: String,
     }
 
-    // ========== INITIALIZATION ==========
+
     
     /// Initialize empty debt state
     public fun init_debt_state(ctx: &mut TxContext): DebtState {
@@ -252,7 +252,7 @@ module move_cmtat::debt {
         }
     }
 
-    /// Initialize empty DebtIdentifier
+
     public fun init_debt_identifier(): DebtIdentifier {
         DebtIdentifier {
             issuer_name: string::utf8(b""),
@@ -263,7 +263,7 @@ module move_cmtat::debt {
         }
     }
 
-    /// Initialize empty DebtInstrument
+
     public fun init_debt_instrument(): DebtInstrument {
         DebtInstrument {
             interest_rate: 0,
@@ -281,7 +281,7 @@ module move_cmtat::debt {
         }
     }
 
-    /// Initialize empty CreditEvents
+
     public fun init_credit_events(): CreditEvents {
         CreditEvents {
             flag_default: false,
@@ -293,7 +293,7 @@ module move_cmtat::debt {
         }
     }
 
-    /// Initialize empty BondTerms
+
     public fun init_bond_terms(): BondTerms {
         BondTerms {
             call_schedule: string::utf8(b""),
@@ -304,7 +304,7 @@ module move_cmtat::debt {
         }
     }
 
-    // ========== DEBTIDENTIFIER GETTERS ==========
+
     
     public fun get_issuer_name(state: &DebtState): String { state.identifier.issuer_name }
     public fun get_issuer_description(state: &DebtState): String { state.identifier.issuer_description }
@@ -312,7 +312,7 @@ module move_cmtat::debt {
     public fun get_debt_holder_representative(state: &DebtState): String { state.identifier.debt_holder_representative }
     public fun get_isin(state: &DebtState): String { state.identifier.isin }
 
-    // ========== DEBTINSTRUMENT GETTERS ==========
+
     
     public fun get_interest_rate(state: &DebtState): u64 { state.instrument.interest_rate }
     public fun get_par_value(state: &DebtState): u64 { state.instrument.par_value }
@@ -327,7 +327,7 @@ module move_cmtat::debt {
     public fun get_currency(state: &DebtState): String { state.instrument.currency }
     public fun get_currency_contract(state: &DebtState): address { state.instrument.currency_contract }
 
-    // ========== CREDITEVENTS GETTERS ==========
+
     
     public fun is_default(state: &DebtState): bool { state.credit_events.flag_default }
     public fun is_redeemed(state: &DebtState): bool { state.credit_events.flag_redeemed }
@@ -336,7 +336,7 @@ module move_cmtat::debt {
     public fun get_principal_distributed(state: &DebtState): u64 { state.credit_events.principal_distributed }
     public fun get_next_coupon_date(state: &DebtState): u64 { state.credit_events.next_coupon_date }
 
-    // ========== BONDTERMS GETTERS ==========
+
     
     public fun get_call_schedule(state: &DebtState): String { state.terms.call_schedule }
     public fun get_put_schedule(state: &DebtState): String { state.terms.put_schedule }
@@ -344,7 +344,7 @@ module move_cmtat::debt {
     public fun get_convertible_terms(state: &DebtState): String { state.terms.convertible_terms }
     public fun get_collateral_description(state: &DebtState): String { state.terms.collateral_description }
 
-    // ========== DEBTENGINE GETTERS ==========
+
     
     public fun get_debt_engine(state: &DebtState): address { state.debt_engine }
     public fun is_external_engine_enabled(state: &DebtState): bool { state.use_external_engine }
@@ -355,7 +355,7 @@ module move_cmtat::debt {
     public fun get_credit_events_legacy(state: &DebtState): String { state.credit_events_legacy }
     public fun is_default_flagged(state: &DebtState): bool { state.credit_events.flag_default }
 
-    // ========== DIRECT CREDITEVENTS GETTERS ==========
+
     /// Getters for CreditEvents struct (for external modules)
     
     public fun get_credit_events(state: &DebtState): CreditEvents {
@@ -369,20 +369,20 @@ module move_cmtat::debt {
     public fun credit_events_get_principal_distributed(events: &CreditEvents): u64 { events.principal_distributed }
     public fun credit_events_get_next_coupon_date(events: &CreditEvents): u64 { events.next_coupon_date }
 
-    // ========== DIRECT DEBTIDENTIFIER GETTERS ==========
+
     /// Getters for DebtIdentifier struct (for external modules)
     
     public fun identifier_get_issuer_name(id: &DebtIdentifier): String { id.issuer_name }
     public fun identifier_get_isin(id: &DebtIdentifier): String { id.isin }
 
-    // ========== DIRECT DEBTINSTRUMENT GETTERS ==========
+
     /// Getters for DebtInstrument struct (for external modules)
     
     public fun instrument_get_interest_rate(inst: &DebtInstrument): u64 { inst.interest_rate }
     public fun instrument_get_maturity_date(inst: &DebtInstrument): u64 { inst.maturity_date }
     public fun instrument_get_par_value(inst: &DebtInstrument): u64 { inst.par_value }
 
-    // ========== CREDITEVENTS SETTERS (Direct) ==========
+
     /// Setters for CreditEvents struct (for external modules)
     
     public fun credit_events_flag_default(events: &mut CreditEvents) {
@@ -409,7 +409,7 @@ module move_cmtat::debt {
         events.principal_distributed = events.principal_distributed + amount;
     }
 
-    // ========== DEBTIDENTIFIER SETTERS ==========
+
     
     public fun set_debt_identifier(state: &mut DebtState, identifier: DebtIdentifier) {
         state.identifier = identifier;
@@ -435,7 +435,7 @@ module move_cmtat::debt {
         state.identifier.isin = isin;
     }
 
-    // ========== DEBTINSTRUMENT SETTERS ==========
+
     
     public fun set_debt_instrument(state: &mut DebtState, instrument: DebtInstrument) {
         state.instrument = instrument;
@@ -489,7 +489,7 @@ module move_cmtat::debt {
         state.instrument.currency_contract = contract;
     }
 
-    // ========== CREDITEVENTS SETTERS ==========
+
     
     public fun set_credit_events(state: &mut DebtState, events: CreditEvents) {
         state.credit_events = events;
@@ -523,7 +523,7 @@ module move_cmtat::debt {
         state.credit_events.next_coupon_date = date;
     }
 
-    // ========== BONDTERMS SETTERS ==========
+
     
     public fun set_bond_terms(state: &mut DebtState, terms: BondTerms) {
         state.terms = terms;
@@ -549,7 +549,7 @@ module move_cmtat::debt {
         state.terms.collateral_description = description;
     }
 
-    // ========== DEBTENGINE SETTERS ==========
+
     
     public fun set_debt_engine(state: &mut DebtState, engine: address) {
         state.debt_engine = engine;
@@ -573,7 +573,7 @@ module move_cmtat::debt {
         state.credit_events_legacy = events;
     }
 
-    // ========== VALIDATION FUNCTIONS ==========
+
     
     /// Require debt is not in default
     public fun require_not_in_default(state: &DebtState) {
@@ -638,7 +638,7 @@ module move_cmtat::debt {
         validate_minimum_denomination(state, amount)
     }
 
-    // ========== INTEREST CALCULATION HELPERS ==========
+
     
     /// Get interest rate multiplier constant
     public fun interest_rate_multiplier(): u64 { INTEREST_RATE_MULTIPLIER }
@@ -655,7 +655,7 @@ module move_cmtat::debt {
         percentage * (INTEREST_RATE_MULTIPLIER / 100)
     }
 
-    /// Calculate simple interest
+
     /// Formula: principal * rate * (days_numerator / days_denominator)
     /// Returns interest amount in base units
     public fun calculate_simple_interest(
@@ -677,7 +677,7 @@ module move_cmtat::debt {
         ((interest / denominator) as u64)
     }
 
-    // ========== DAY COUNT HELPERS ==========
+
     
     /// Get days in year for given convention
     public fun days_in_year(convention: &DayCountConvention): u64 {
@@ -685,11 +685,11 @@ module move_cmtat::debt {
             DayCountConvention::Thirty360 => DAYS_360,
             DayCountConvention::Actual360 => DAYS_360,
             DayCountConvention::Actual365 => DAYS_365,
-            DayCountConvention::ActualActual => DAYS_365, // Simplified
+            DayCountConvention::ActualActual => DAYS_365,
         }
     }
 
-    // ========== CONSTRUCTOR HELPERS ==========
+
     
     /// Create DebtIdentifier with all fields
     public fun create_debt_identifier(
@@ -775,3 +775,4 @@ module move_cmtat::debt {
         }
     }
 }
+

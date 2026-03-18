@@ -7,7 +7,7 @@ module move_cmtat::document_registry {
     use iota::vec_map::{Self, VecMap};
     use iota::event;
 
-    // ========== ERRORS ==========
+
     
     const EDocumentNotFound: u64 = 600;
     const EDocumentAlreadyExists: u64 = 601;
@@ -15,7 +15,7 @@ module move_cmtat::document_registry {
     const EInvalidDocumentHash: u64 = 603;
     const EInvalidDocumentUri: u64 = 604;
 
-    // ========== STRUCTS ==========
+
     
     /// Document structure for CMTAT compliant document management
     public struct Document has copy, drop, store {
@@ -23,19 +23,19 @@ module move_cmtat::document_registry {
         hash: String,               // Document hash (e.g., SHA-256, IPFS CID)
         uri: String,                // URI to access document
         last_modified: u64,         // Unix timestamp in seconds
-        document_type: String,      // Type classification
-        version: u64,               // Document version number
+        document_type: String,
+        version: u64,
     }
 
-    /// Document registry state
+
     public struct DocumentRegistryState has key, store {
         id: UID,
-        documents: VecMap<String, Document>,  // name -> Document
+        documents: VecMap<String, Document>,
         document_count: u64,
         last_modified_global: u64,            // Last modification across all documents
     }
 
-    // ========== EVENTS ==========
+
     
     public struct DocumentAdded has copy, drop {
         name: String,
@@ -66,7 +66,7 @@ module move_cmtat::document_registry {
         _timestamp: u64,
     }
 
-    // ========== INITIALIZATION ==========
+
     
     /// Initialize empty document registry
     public fun init_document_registry(ctx: &mut TxContext): DocumentRegistryState {
@@ -78,7 +78,7 @@ module move_cmtat::document_registry {
         }
     }
 
-    // ========== DOCUMENT MANAGEMENT ==========
+
     
     /// Add new document to registry
     public fun add_document(
@@ -89,13 +89,13 @@ module move_cmtat::document_registry {
         timestamp: u64,
         ctx: &TxContext
     ) {
-        // Validate inputs
+
         assert!(!string::is_empty(&name), EInvalidDocumentName);
         assert!(!string::is_empty(&hash), EInvalidDocumentHash);
         assert!(!string::is_empty(&uri), EInvalidDocumentUri);
         assert!(!document_exists(state, name), EDocumentAlreadyExists);
 
-        // Create document
+
         let document = Document {
             name,
             hash,
@@ -105,12 +105,12 @@ module move_cmtat::document_registry {
             version: 1,
         };
 
-        // Store document
+
         vec_map::insert(&mut state.documents, name, document);
         state.document_count = state.document_count + 1;
         state.last_modified_global = timestamp;
 
-        // Emit event
+
         event::emit(DocumentAdded {
             name,
             hash,
@@ -157,7 +157,7 @@ module move_cmtat::document_registry {
         });
     }
 
-    /// Update existing document
+
     public fun update_document(
         state: &mut DocumentRegistryState,
         name: String,
@@ -170,12 +170,12 @@ module move_cmtat::document_registry {
         assert!(!string::is_empty(&new_hash), EInvalidDocumentHash);
         assert!(!string::is_empty(&new_uri), EInvalidDocumentUri);
 
-        // Get old document
+
         let old_document = get_document(state, name);
         let old_hash = old_document.hash;
         let new_version = old_document.version + 1;
 
-        // Create updated document
+
         let updated_document = Document {
             name,
             hash: new_hash,
@@ -190,7 +190,7 @@ module move_cmtat::document_registry {
         vec_map::insert(&mut state.documents, name, updated_document);
         state.last_modified_global = timestamp;
 
-        // Emit event
+
         event::emit(DocumentUpdated {
             name,
             old_hash,
@@ -214,7 +214,7 @@ module move_cmtat::document_registry {
         state.document_count = state.document_count - 1;
         state.last_modified_global = timestamp;
 
-        // Emit event
+
         event::emit(DocumentRemoved {
             name,
             removed_by: tx_context::sender(ctx),
@@ -222,7 +222,7 @@ module move_cmtat::document_registry {
         });
     }
 
-    /// Batch add documents
+
     public fun batch_add_documents(
         state: &mut DocumentRegistryState,
         names: vector<String>,
@@ -249,7 +249,7 @@ module move_cmtat::document_registry {
         }
     }
 
-    // ========== QUERIES ==========
+
     
     /// Get document by name
     public fun get_document(state: &DocumentRegistryState, name: String): Document {
@@ -271,7 +271,7 @@ module move_cmtat::document_registry {
         vec_map::contains(&state.documents, &name)
     }
 
-    /// Get document hash
+
     public fun get_document_hash(state: &DocumentRegistryState, name: String): String {
         assert!(document_exists(state, name), EDocumentNotFound);
         vec_map::get(&state.documents, &name).hash
@@ -286,7 +286,7 @@ module move_cmtat::document_registry {
         }
     }
 
-    /// Get document URI
+
     public fun get_document_uri(state: &DocumentRegistryState, name: String): String {
         assert!(document_exists(state, name), EDocumentNotFound);
         vec_map::get(&state.documents, &name).uri
@@ -307,13 +307,13 @@ module move_cmtat::document_registry {
         vec_map::get(&state.documents, &name).last_modified
     }
 
-    /// Get document type
+
     public fun get_document_type(state: &DocumentRegistryState, name: String): String {
         assert!(document_exists(state, name), EDocumentNotFound);
         vec_map::get(&state.documents, &name).document_type
     }
 
-    /// Get document version
+
     public fun get_document_version(state: &DocumentRegistryState, name: String): u64 {
         assert!(document_exists(state, name), EDocumentNotFound);
         vec_map::get(&state.documents, &name).version
@@ -324,12 +324,12 @@ module move_cmtat::document_registry {
         vec_map::keys(&state.documents)
     }
 
-    /// Get document count
+
     public fun get_document_count(state: &DocumentRegistryState): u64 {
         state.document_count
     }
 
-    /// Get all documents
+
     public fun get_all_documents(state: &DocumentRegistryState): VecMap<String, Document> {
         state.documents
     }
@@ -360,9 +360,9 @@ module move_cmtat::document_registry {
         state.last_modified_global
     }
 
-    // ========== VALIDATION ==========
+
     
-    /// Require document exists
+
     public fun require_document_exists(state: &DocumentRegistryState, name: String) {
         assert!(document_exists(state, name), EDocumentNotFound);
     }
@@ -386,7 +386,7 @@ module move_cmtat::document_registry {
         len > 0 && len <= 2048
     }
 
-    // ========== CLASSIFICATION ==========
+
     
     /// Classify document type based on name
     fun classify_document_type(name: &String): String {
@@ -450,7 +450,7 @@ module move_cmtat::document_registry {
                 let byte1 = *vector::borrow(bytes, i + j);
                 let byte2 = *vector::borrow(pattern, j);
                 
-                // Case-insensitive comparison
+
                 if (to_lower(byte1) != to_lower(byte2)) {
                     matched = false;
                     break
@@ -479,9 +479,9 @@ module move_cmtat::document_registry {
         }
     }
 
-    // ========== UTILITY FUNCTIONS ==========
+
     
-    /// Create document struct
+
     public fun create_document(
         name: String,
         hash: String,
@@ -546,3 +546,4 @@ module move_cmtat::document_registry {
         get_document_last_modified(state, name) > since_timestamp
     }
 }
+

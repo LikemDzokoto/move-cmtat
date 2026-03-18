@@ -6,26 +6,26 @@ module move_cmtat::bond_validation {
     use std::string::String;
     use move_cmtat::debt::{Self, DebtState, DayCountConvention, BusinessDayConvention};
 
-    // ========== CONSTANTS ==========
+
     
     /// Fixed-point multiplier for interest rates (6 decimals)
     const INTEREST_RATE_MULTIPLIER: u64 = 1_000_000;
     
-    /// Day count denominators
+
     const DAYS_360: u64 = 360;
     const DAYS_365: u64 = 365;
-    const DAYS_366: u64 = 366; // Leap year
+    const DAYS_366: u64 = 366;
     
     /// Seconds in a day
     const SECONDS_PER_DAY: u64 = 86400;
     
     /// Seconds in common year
-    const SECONDS_PER_YEAR_365: u64 = 31536000; // 365 * 86400
+    const SECONDS_PER_YEAR_365: u64 = 31536000;
     
     /// Seconds in leap year
-    const SECONDS_PER_YEAR_366: u64 = 31622400; // 366 * 86400
+    const SECONDS_PER_YEAR_366: u64 = 31622400;
 
-    // ========== ERRORS ==========
+
     
     const EInvalidDayCountConvention: u64 = 500;
     const EInvalidBusinessDayConvention: u64 = 501;
@@ -36,13 +36,13 @@ module move_cmtat::bond_validation {
     const EInvalidTimestamp: u64 = 506;
     const ECalculationOverflow: u64 = 507;
 
-    // ========== DAY COUNT CALCULATIONS ==========
+
     
     /// Calculate day count fraction using 30/360 convention
     /// Formula: (360*(y2-y1) + 30*(m2-m1) + (d2-d1)) / 360
-    /// Simplified: days / 360
+
     public fun calculate_day_count_30_360(start_date: u64, end_date: u64): (u64, u64) {
-        // Validate range
+
         assert!(end_date >= start_date, EInvalidDateRange);
         
         // Calculate days between timestamps
@@ -121,9 +121,9 @@ module move_cmtat::bond_validation {
         }
     }
 
-    // ========== INTEREST CALCULATIONS ==========
+
     
-    /// Calculate simple interest
+
     /// Formula: principal * rate * (days_numerator / days_denominator)
     /// Rate is fixed-point (e.g., 5250000 for 5.25%)
     /// Returns interest amount in base units
@@ -133,7 +133,7 @@ module move_cmtat::bond_validation {
         days_numerator: u64,
         days_denominator: u64
     ): u64 {
-        // Validate inputs
+
         assert!(days_denominator > 0, EInvalidInterestCalculation);
         
         if (principal == 0 || rate_fixed_point == 0 || days_numerator == 0) {
@@ -146,7 +146,7 @@ module move_cmtat::bond_validation {
         let interest = principal_times_rate * (days_numerator as u128);
         let denominator = (INTEREST_RATE_MULTIPLIER as u128) * (days_denominator as u128);
         
-        // Ensure no overflow
+
         assert!(denominator > 0, ECalculationOverflow);
         
         ((interest / denominator) as u64)
@@ -193,7 +193,7 @@ module move_cmtat::bond_validation {
         // Period length depends on convention
         let convention_u8 = debt::day_count_to_u8(convention);
         let (period_days, year_days) = if (convention_u8 == debt::day_count_thirty360()) {
-            (30u64, DAYS_360) // Monthly
+            (30u64, DAYS_360)
         } else {
             (year_days_to_period(DAYS_365, &get_coupon_frequency_from_rate(rate_fixed_point)), DAYS_365)
         };
@@ -216,7 +216,7 @@ module move_cmtat::bond_validation {
         calculate_accrued_interest(principal, rate_fixed_point, issuance_date, maturity_date, convention)
     }
 
-    // ========== DATE UTILITIES ==========
+
     
     /// Calculate days between two timestamps
     public fun days_between(start_timestamp: u64, end_timestamp: u64): u64 {
@@ -263,11 +263,11 @@ module move_cmtat::bond_validation {
     fun timestamp_to_year(timestamp: u64): u64 {
         // Unix epoch starts at 1970
         // Average seconds per year accounting for leap years
-        let avg_seconds_per_year = 31557600; // 365.25 * 86400
+        let avg_seconds_per_year = 31557600;
         1970 + (timestamp / avg_seconds_per_year)
     }
 
-    // ========== BUSINESS DAY HANDLING ==========
+
     
     /// Adjust date for business day convention
     /// Note: Full implementation would need external oracle for business days
@@ -294,9 +294,9 @@ module move_cmtat::bond_validation {
         // In production, this would check actual business calendar
         let day_of_week = day_of_week(date);
         
-        if (day_of_week == 0) { // Sunday
+        if (day_of_week == 0) {
             date + SECONDS_PER_DAY
-        } else if (day_of_week == 6) { // Saturday
+        } else if (day_of_week == 6) {
             date + (2 * SECONDS_PER_DAY)
         } else {
             date
@@ -320,9 +320,9 @@ module move_cmtat::bond_validation {
     fun adjust_preceding(date: u64): u64 {
         let day_of_week = day_of_week(date);
         
-        if (day_of_week == 0) { // Sunday
+        if (day_of_week == 0) {
             date - (2 * SECONDS_PER_DAY)
-        } else if (day_of_week == 6) { // Saturday
+        } else if (day_of_week == 6) {
             date - SECONDS_PER_DAY
         } else {
             date
@@ -332,7 +332,7 @@ module move_cmtat::bond_validation {
     /// Calculate day of week (0 = Sunday, 6 = Saturday)
     /// Uses Zeller's congruence algorithm
     fun day_of_week(timestamp: u64): u64 {
-        // Simplified approximation
+
         // Days since Unix epoch
         let days = timestamp / SECONDS_PER_DAY;
         // Jan 1, 1970 was a Thursday (4)
@@ -341,7 +341,7 @@ module move_cmtat::bond_validation {
 
     /// Get month of year (1-12)
     fun month_of_year(timestamp: u64): u64 {
-        // Simplified approximation
+
         // This is not precise but sufficient for basic Modified Following
         let days = timestamp / SECONDS_PER_DAY;
         let year_days = days % 365;
@@ -360,7 +360,7 @@ module move_cmtat::bond_validation {
         else { return 12 }
     }
 
-    // ========== BOND VALIDATION ==========
+
     
     /// Check if bond has reached maturity
     public fun is_matured(current_time: u64, state: &DebtState): bool {
@@ -412,7 +412,7 @@ module move_cmtat::bond_validation {
         debt::require_not_redeemed(state);
     }
 
-    // ========== COUPON SCHEDULE UTILITIES ==========
+
     
     /// Get period length in days from coupon frequency string
     public fun coupon_frequency_to_days(frequency: &String): u64 {
@@ -428,7 +428,7 @@ module move_cmtat::bond_validation {
         } else if (freq_str == std::ascii::string(b"MONTHLY")) {
             30
         } else {
-            365 // Default to annual
+            365
         }
     }
 
@@ -463,11 +463,11 @@ module move_cmtat::bond_validation {
         total_days / period_days
     }
 
-    // ========== HELPER FUNCTIONS ==========
+
     
     /// Convert year days to period days based on coupon frequency
     fun year_days_to_period(year_days: u64, _frequency: &u64): u64 {
-        // Simplified: assume annual
+
         year_days
     }
 
@@ -502,3 +502,4 @@ module move_cmtat::bond_validation {
         assert!(validate_interest_rate(rate_fixed_point), EInvalidInterestCalculation);
     }
 }
+

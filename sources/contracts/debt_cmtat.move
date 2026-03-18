@@ -18,7 +18,7 @@ module move_cmtat::debt_cmtat {
 
     public struct DEBT_CMTAT has drop {}
 
-    // ========== CMTAT REGISTRY ==========
+
     public struct CMTATRegistry has key {
         id: object::UID,
         terms: String,
@@ -49,7 +49,7 @@ module move_cmtat::debt_cmtat {
     public struct DebtCap has key, store { id: object::UID }
     public struct EnforcerCap has key, store { id: object::UID }
 
-    // ========== EVENTS ==========
+
     public struct TokenMinted has copy, drop {
         minter: address,
         to: address,
@@ -141,7 +141,7 @@ module move_cmtat::debt_cmtat {
         admin: address,
     }
 
-    // ========== ERRORS ==========
+
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
@@ -186,7 +186,7 @@ module move_cmtat::debt_cmtat {
             interest_engine: interest_engine::init_interest_engine(ctx),
         };
 
-        // capabilities creation
+
         let deployer = tx_context::sender(ctx);
         let admin_cap = AdminCap { id: object::new(ctx) };
         let mint_cap = MintCap { id: object::new(ctx) };
@@ -213,7 +213,7 @@ module move_cmtat::debt_cmtat {
         transfer::transfer(enforcer_cap, deployer);
     }
 
-    // ========== VIEW FUNCTIONS  ==========
+
     public fun name(metadata: &CoinMetadata<DEBT_CMTAT>): String {
         coin::get_name(metadata)
     }
@@ -230,14 +230,14 @@ module move_cmtat::debt_cmtat {
         coin::total_supply(treasury_cap)
     }
 
-    // ========== REGISTRY VIEWS ==========
+
     public fun terms(registry: &CMTATRegistry): String { registry.terms }
     public fun information(registry: &CMTATRegistry): String { registry.information }
     public fun token_id(registry: &CMTATRegistry): String { registry.token_id }
     public fun document_uri(registry: &CMTATRegistry): String { registry.document_uri }
     public fun deactivated(registry: &CMTATRegistry): bool { registry.deactivated }
 
-    // ========== COMPLIANCE VIEWS  ==========
+
     public fun is_paused(deny_list: &deny_list::DenyList, ctx: &tx_context::TxContext): bool {
         coin::deny_list_v1_is_global_pause_enabled_current_epoch<DEBT_CMTAT>(deny_list, ctx)
     }
@@ -246,7 +246,7 @@ module move_cmtat::debt_cmtat {
         coin::deny_list_v1_contains_current_epoch<DEBT_CMTAT>(deny_list, account, ctx)
     }
 
-    // ========== DEBT-SPECIFIC VIEWS ==========
+
     public fun debt_info(state: &DebtCMTATState): String {
         debt::get_debt(&state.debt_state)
     }
@@ -271,7 +271,7 @@ module move_cmtat::debt_cmtat {
         debt::is_fully_redeemed(&state.debt_state)
     }
 
-    // ========== DEBT IDENTIFIER VIEWS ==========
+
     public fun get_issuer_name(state: &DebtCMTATState): String {
         debt::get_issuer_name(&state.debt_state)
     }
@@ -284,7 +284,7 @@ module move_cmtat::debt_cmtat {
         debt::get_isin(&state.debt_state)
     }
 
-    // ========== DEBT INSTRUMENT VIEWS ==========
+
     public fun get_interest_rate(state: &DebtCMTATState): u64 {
         debt::get_interest_rate(&state.debt_state)
     }
@@ -313,7 +313,7 @@ module move_cmtat::debt_cmtat {
         debt::get_rating(&state.debt_state)
     }
 
-    // ========== INTEREST ENGINE VIEWS ==========
+
     public fun get_total_interest_accrued(state: &DebtCMTATState, current_time: u64): u64 {
         interest_engine::get_total_interest_accrued(&state.interest_engine, current_time)
     }
@@ -330,7 +330,7 @@ module move_cmtat::debt_cmtat {
         interest_engine::is_schedule_generated(&state.interest_engine)
     }
 
-    // ========== CAPABILITY GRANTING ==========
+
 
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
@@ -396,7 +396,7 @@ module move_cmtat::debt_cmtat {
         transfer::public_transfer(debt_cap, to);
     }
 
-    // ========== ADMINISTRATIVE FUNCTIONS ==========
+
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
@@ -457,9 +457,9 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== DEBT-SPECIFIC FUNCTIONS ==========
+
     
-    // ---- Debt Identifier ----
+
     public entry fun set_debt_identifier(
         _debt_cap: &DebtCap,
         state: &mut DebtCMTATState,
@@ -484,7 +484,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ---- Debt Instrument ----
+
     public entry fun set_debt_instrument(
         _debt_cap: &DebtCap,
         state: &mut DebtCMTATState,
@@ -523,7 +523,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ---- Bond Terms ----
+
     public entry fun set_bond_terms(
         _debt_cap: &DebtCap,
         state: &mut DebtCMTATState,
@@ -548,7 +548,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ---- Credit Events ----
+
     public entry fun set_rating(
         _debt_cap: &DebtCap,
         state: &mut DebtCMTATState,
@@ -653,7 +653,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== MINTING FUNCTIONS  ==========
+
     public fun mint(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         registry: &CMTATRegistry,
@@ -707,7 +707,7 @@ module move_cmtat::debt_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== BURNING FUNCTIONS  ==========
+
     public fun burn(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         coins: Coin<DEBT_CMTAT>,
@@ -735,7 +735,7 @@ module move_cmtat::debt_cmtat {
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS  ==========
+
     public entry fun pause(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
@@ -779,7 +779,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== FREEZE FUNCTIONS  ==========
+
     public entry fun set_address_frozen(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<DEBT_CMTAT>,
@@ -819,7 +819,7 @@ module move_cmtat::debt_cmtat {
         }
     }
 
-    // ========== SNAPSHOT FUNCTIONS ==========
+
     public entry fun schedule_snapshot(
         _snapshot_cap: &SnapshotCap,
         state: &mut DebtCMTATState,
@@ -833,7 +833,7 @@ module move_cmtat::debt_cmtat {
         snapshot_engine::create_snapshot(&mut state.snapshot_engine, total_supply, timestamp, ctx);
     }
 
-    // ========== RULE ENGINE MANAGEMENT ==========
+
     public fun rule_engine_active(state: &DebtCMTATState): bool {
         state.rule_engine_active
     }
@@ -901,7 +901,7 @@ module move_cmtat::debt_cmtat {
         rule_engine_v2::set_time_limits(&mut state.rule_engine, approval_deadline_ms, execution_deadline_ms, ctx);
     }
 
-    // ========== RULE MANAGEMENT ==========
+
 
     public entry fun add_to_blacklist(
         _admin_cap: &AdminCap,
@@ -975,7 +975,7 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== TRANSFER VALIDATION (Internal) ==========
+
     fun validate_transfer(
         state: &DebtCMTATState,
         amount: u64,
@@ -987,7 +987,7 @@ module move_cmtat::debt_cmtat {
         // Block if in default
         debt::require_not_in_default(&state.debt_state);
         
-        // Validate minimum denomination
+
         debt::require_valid_minimum_denomination(&state.debt_state, amount);
     }
 
@@ -1005,13 +1005,13 @@ module move_cmtat::debt_cmtat {
         let amount = coin::value(&coins);
         let current_time = clock::timestamp_ms(clock);
 
-        // Check deactivation
+
         assert!(!registry.deactivated, EModuleDeactivated);
 
         // Check debt default + maturity + denomination
         validate_transfer(state, amount, current_time);
 
-        // Check native DenyList
+
         assert!(!is_paused(deny_list, ctx), EModulePaused);
         assert!(!is_frozen(deny_list, from, ctx), EAddressFrozen);
         assert!(!is_frozen(deny_list, to, ctx), EAddressFrozen);
@@ -1032,11 +1032,11 @@ module move_cmtat::debt_cmtat {
             );
         };
 
-        // Transfer the coins
+
         transfer::public_transfer(coins, to);
     }
 
-    // ========== REDEMPTION FUNCTION ==========
+
     public entry fun redeem(
         treasury_cap: &mut TreasuryCap<DEBT_CMTAT>,
         registry: &CMTATRegistry,
@@ -1049,10 +1049,10 @@ module move_cmtat::debt_cmtat {
         let amount = coin::value(&coins);
         let current_time = clock::timestamp_ms(clock);
 
-        // Check deactivation
+
         assert!(!registry.deactivated, EModuleDeactivated);
 
-        // Check native DenyList
+
         assert!(!is_paused(deny_list, ctx), EModulePaused);
 
         // Only allowed when matured OR in default
@@ -1060,16 +1060,16 @@ module move_cmtat::debt_cmtat {
         let is_default = debt::is_default(&state.debt_state);
         assert!(is_matured || is_default, ENotMaturedOrDefault);
 
-        // Validate minimum denomination
+
         debt::require_valid_minimum_denomination(&state.debt_state, amount);
 
-        // Burn the tokens
+
         coin::burn(treasury_cap, coins);
 
-        // Update principal distributed
+
         debt::record_principal_distribution(&mut state.debt_state, amount);
 
-        // Emit redemption event
+
         event::emit(TokenBurned {
             burner: tx_context::sender(ctx),
             from: tx_context::sender(ctx),
@@ -1077,9 +1077,9 @@ module move_cmtat::debt_cmtat {
         });
     }
 
-    // ========== INTEREST ENGINE FUNCTIONS ==========
+
     
-    // ---- Coupon Schedule ----
+
     public entry fun generate_coupon_schedule(
         _debt_cap: &DebtCap,
         state: &mut DebtCMTATState,
@@ -1110,7 +1110,7 @@ module move_cmtat::debt_cmtat {
         );
     }
 
-    // ---- Coupon Payment Recording ----
+
     public entry fun record_coupon_payment(
         _debt_cap: &DebtCap,
         state: &mut DebtCMTATState,
@@ -1127,7 +1127,7 @@ module move_cmtat::debt_cmtat {
         );
     }
 
-    // ---- Coupon Claims ----
+
     public fun get_claimable_amount(
         state: &DebtCMTATState,
         coupon_number: u64,
@@ -1152,7 +1152,7 @@ module move_cmtat::debt_cmtat {
         interest_engine::get_unpaid_coupons(&state.interest_engine)
     }
 
-    // ========== COUPON CLAIM FUNCTIONS ==========
+
 
     /// Check if a coupon has been claimed by a holder
     public fun is_coupon_claimed(
@@ -1200,9 +1200,10 @@ module move_cmtat::debt_cmtat {
         interest_engine::get_claim_count(&state.interest_engine)
     }
 
-    // ========== TEST-ONLY ==========
+
     #[test_only]
     public fun init_for_testing(ctx: &mut tx_context::TxContext) {
         init(DEBT_CMTAT {}, ctx);
     }
 }
+

@@ -7,7 +7,7 @@ module move_cmtat::interest_engine {
     use iota::table::{Self, Table};
     use iota::event;
 
-    // ========== CONSTANTS ==========
+
     
     /// Fixed-point multiplier for interest rates
     const INTEREST_RATE_MULTIPLIER: u64 = 1_000_000;
@@ -21,7 +21,7 @@ module move_cmtat::interest_engine {
     const DAYS_QUARTERLY: u64 = 91;
     const DAYS_MONTHLY: u64 = 30;
 
-    // ========== ERRORS ==========
+
     
     const ECouponNotFound: u64 = 800;
     const EInvalidCouponNumber: u64 = 801;
@@ -35,9 +35,9 @@ module move_cmtat::interest_engine {
     const EAlreadyClaimed: u64 = 809;
     const EClaimNotDue: u64 = 810;
 
-    // ========== STRUCTS ==========
+
     
-    /// Individual coupon payment
+
     public struct CouponPayment has copy, drop, store {
         coupon_number: u64,               // Sequential number (1, 2, 3...)
         payment_date: u64,                // Scheduled payment date (Unix seconds)
@@ -45,12 +45,12 @@ module move_cmtat::interest_engine {
         amount_per_bond: u64,             // Interest per bond unit
         total_amount: u64,                // Total interest for all bonds
         principal_at_record: u64,         // Total supply at record date
-        paid: bool,                       // Payment status
-        actual_payment_date: Option<u64>, // When actually paid
-        payment_tx: Option<address>,      // Transaction reference
+        paid: bool,
+        actual_payment_date: Option<u64>,
+        payment_tx: Option<address>,
     }
 
-    // ========== GETTERS ==========
+
 
     public fun coupon_get_number(coupon: &CouponPayment): u64 { coupon.coupon_number }
     public fun coupon_get_payment_date(coupon: &CouponPayment): u64 { coupon.payment_date }
@@ -62,7 +62,7 @@ module move_cmtat::interest_engine {
     public fun coupon_get_actual_payment_date(coupon: &CouponPayment): Option<u64> { coupon.actual_payment_date }
     public fun coupon_get_payment_tx(coupon: &CouponPayment): Option<address> { coupon.payment_tx }
 
-    /// Coupon schedule
+
     public struct CouponSchedule has copy, drop, store {
         payments: vector<CouponPayment>,
         total_coupons: u64,
@@ -73,11 +73,11 @@ module move_cmtat::interest_engine {
         schedule_generated: bool,
     }
 
-    /// Interest engine state
+
     public struct InterestEngineState has key, store {
         id: UID,
         schedule: CouponSchedule,
-        payment_history: Table<u64, CouponPayment>,  // coupon_number -> CouponPayment
+        payment_history: Table<u64, CouponPayment>,
         // Claim tracking: encode (coupon_number, holder_address) as bytes -> claimed
         claims: Table<vector<u8>, bool>,
         total_interest_paid: u64,
@@ -85,7 +85,7 @@ module move_cmtat::interest_engine {
         last_calculation_time: u64,
     }
 
-    // ========== EVENTS ==========
+
     
     public struct ScheduleCreated has copy, drop {
         total_coupons: u64,
@@ -125,7 +125,7 @@ module move_cmtat::interest_engine {
         _calculated_by: address,
     }
 
-    // ========== INITIALIZATION ==========
+
     
     /// Initialize empty interest engine
     public fun init_interest_engine(ctx: &mut TxContext): InterestEngineState {
@@ -153,7 +153,7 @@ module move_cmtat::interest_engine {
         }
     }
 
-    // ========== SCHEDULE GENERATION ==========
+
     
     /// Generate coupon schedule from bond parameters
     public fun generate_coupon_schedule(
@@ -184,13 +184,13 @@ module move_cmtat::interest_engine {
             num_coupons = num_coupons + 1;
         };
 
-        // Generate coupon payments
+
         let mut payments = vector::empty<CouponPayment>();
         let mut current_date = issuance_date + period_seconds;
         let mut coupon_num = 1;
 
         while (coupon_num <= num_coupons && current_date <= maturity_date) {
-            // Calculate coupon amount
+
             let amount_per_bond = calculate_coupon_amount(
                 par_value,
                 rate_fixed_point,
@@ -215,10 +215,10 @@ module move_cmtat::interest_engine {
 
             vector::push_back(&mut payments, payment);
 
-            // Store in history
+
             table::add(&mut state.payment_history, coupon_num, payment);
 
-            // Emit event
+
             event::emit(CouponScheduled {
                 coupon_number: coupon_num,
                 payment_date: current_date,
@@ -231,7 +231,7 @@ module move_cmtat::interest_engine {
             coupon_num = coupon_num + 1;
         };
 
-        // Update schedule
+
         state.schedule = CouponSchedule {
             payments,
             total_coupons: num_coupons,
@@ -254,7 +254,7 @@ module move_cmtat::interest_engine {
         });
     }
 
-    // ========== COUPON MANAGEMENT ==========
+
     
     /// Get next unpaid coupon
     public fun get_next_coupon(state: &InterestEngineState): Option<CouponPayment> {
@@ -324,7 +324,7 @@ module move_cmtat::interest_engine {
         unpaid
     }
 
-    /// Get paid coupons
+
     public fun get_paid_coupons(state: &InterestEngineState): vector<CouponPayment> {
         let mut paid = vector::empty<CouponPayment>();
         
@@ -344,9 +344,9 @@ module move_cmtat::interest_engine {
         paid
     }
 
-    // ========== PAYMENT PROCESSING ==========
+
     
-    /// Record coupon payment
+
     public fun record_coupon_payment(
         state: &mut InterestEngineState,
         coupon_number: u64,
@@ -359,26 +359,26 @@ module move_cmtat::interest_engine {
         assert!(!coupon.paid, ECouponAlreadyPaid);
         assert!(actual_payment_date >= coupon.payment_date, ECouponNotDue);
 
-        // Update coupon
+
         coupon.paid = true;
         coupon.actual_payment_date = option::some(actual_payment_date);
         coupon.payment_tx = option::some(tx_context::sender(ctx));
 
-        // Update in schedule
+
         let idx = coupon_number - 1;
         *vector::borrow_mut(&mut state.schedule.payments, idx) = coupon;
 
-        // Update in history
+
         *table::borrow_mut(&mut state.payment_history, coupon_number) = coupon;
 
-        // Update totals
+
         state.schedule.coupons_paid = state.schedule.coupons_paid + 1;
         if (state.schedule.next_coupon_number == coupon_number) {
             state.schedule.next_coupon_number = coupon_number + 1;
         };
         state.total_interest_paid = state.total_interest_paid + coupon.total_amount;
 
-        // Emit event
+
         event::emit(CouponPaid {
             coupon_number,
             payment_date: coupon.payment_date,
@@ -388,7 +388,7 @@ module move_cmtat::interest_engine {
         });
     }
 
-    /// Batch record payments
+
     public fun batch_record_payments(
         state: &mut InterestEngineState,
         coupon_numbers: vector<u64>,
@@ -445,7 +445,7 @@ module move_cmtat::interest_engine {
         option::none()
     }
 
-    // ========== INTEREST CALCULATIONS ==========
+
     
     /// Get total interest accrued to date
     public fun get_total_interest_accrued(
@@ -510,7 +510,7 @@ module move_cmtat::interest_engine {
         ((share / (coupon.principal_at_record as u128)) as u64)
     }
 
-    // ========== QUERIES ==========
+
     
     /// Get total coupons scheduled
     public fun get_total_coupons(state: &InterestEngineState): u64 {
@@ -581,7 +581,7 @@ module move_cmtat::interest_engine {
         total
     }
 
-    // ========== HELPER FUNCTIONS ==========
+
     
     /// Convert frequency string to seconds
     fun frequency_to_seconds(frequency: &String): u64 {
@@ -605,7 +605,7 @@ module move_cmtat::interest_engine {
         } else if (is_substring(freq_bytes, &month)) {
             DAYS_MONTHLY * SECONDS_PER_DAY
         } else {
-            0 // Invalid
+            0
         }
     }
 
@@ -618,13 +618,13 @@ module move_cmtat::interest_engine {
     ): u64 {
         let period_days = period_seconds / SECONDS_PER_DAY;
         let year_days = if (day_count_convention == 0) {
-            360u64 // 30/360
+            360u64
         } else if (day_count_convention == 1) {
-            360u64 // Actual/360
+            360u64
         } else if (day_count_convention == 2) {
-            365u64 // Actual/365
+            365u64
         } else {
-            365u64 // Actual/Actual (simplified)
+            365u64
         };
 
         // Calculate: principal * rate * period_days / (multiplier * year_days)
@@ -688,14 +688,14 @@ module move_cmtat::interest_engine {
         }
     }
 
-    // ========== VALIDATION ==========
+
     
     /// Require schedule is generated
     public fun require_schedule_generated(state: &InterestEngineState) {
         assert!(state.schedule.schedule_generated, EScheduleAlreadyGenerated);
     }
 
-    /// Require coupon exists
+
     public fun require_coupon_exists(state: &InterestEngineState, coupon_number: u64) {
         assert!(coupon_exists(state, coupon_number), ECouponNotFound);
     }
@@ -707,7 +707,7 @@ module move_cmtat::interest_engine {
         assert!(!coupon.paid, ECouponAlreadyPaid);
     }
 
-    // ========== CLAIM FUNCTIONS ==========
+
 
     /// Encode coupon number and holder address into a key for claims table
     fun encode_claim_key(coupon_number: u64, holder: address): vector<u8> {
@@ -738,7 +738,7 @@ module move_cmtat::interest_engine {
             // Already claimed, update to true
             *table::borrow_mut(&mut state.claims, key) = true;
         } else {
-            // New claim
+
             table::add(&mut state.claims, key, true);
         }
     }
@@ -752,7 +752,7 @@ module move_cmtat::interest_engine {
         holder_balance: u64,
         current_time: u64
     ): u64 {
-        // Check coupon exists
+
         require_coupon_exists(state, coupon_number);
         
         // Check not already claimed
@@ -771,10 +771,10 @@ module move_cmtat::interest_engine {
         let share = (holder_balance as u128) * (coupon.total_amount as u128);
         let amount = ((share / (coupon.principal_at_record as u128)) as u64);
         
-        // Record the claim
+
         record_claim(state, coupon_number, holder);
         
-        // Update totals
+
         state.total_interest_paid = state.total_interest_paid + amount;
         
         amount
@@ -785,3 +785,4 @@ module move_cmtat::interest_engine {
         table::length(&state.claims)
     }
 }
+

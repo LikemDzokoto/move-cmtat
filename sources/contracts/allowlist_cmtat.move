@@ -15,7 +15,7 @@ module move_cmtat::allowlist_cmtat {
     
     public struct ALLOWLIST_CMTAT has drop {}
 
-    // ========== CMTAT REGISTRY ==========
+
     public struct CMTATRegistry has key {
         id: UID,
         terms: String,
@@ -47,7 +47,7 @@ module move_cmtat::allowlist_cmtat {
     public struct SnapshotCap has key, store { id: UID }
     public struct EnforcerCap has key, store { id: UID }
 
-    // ========== EVENTS ==========
+
     public struct TokenMinted has copy, drop {
         minter: address,
         to: address,
@@ -125,7 +125,7 @@ module move_cmtat::allowlist_cmtat {
         admin: address,
     }
 
-    // ========== ERRORS ==========
+
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
@@ -210,7 +210,7 @@ module move_cmtat::allowlist_cmtat {
         coin::total_supply(treasury_cap)
     }
 
-    // ========== REGISTRY VIEWS ==========
+
     public fun terms(registry: &CMTATRegistry): String { registry.terms }
     public fun information(registry: &CMTATRegistry): String { registry.information }
     public fun token_id(registry: &CMTATRegistry): String { registry.token_id }
@@ -226,7 +226,7 @@ module move_cmtat::allowlist_cmtat {
         coin::deny_list_v1_contains_current_epoch<ALLOWLIST_CMTAT>(deny_list, account, ctx)
     }
 
-    // ========== ALLOWLIST VIEWS ==========
+
     public fun is_allowlisted(compliance_state: &ComplianceState, account: address): bool {
         allowlist::is_allowlisted(&compliance_state.allowlist_state, account)
     }
@@ -235,7 +235,7 @@ module move_cmtat::allowlist_cmtat {
         allowlist::is_enabled(&compliance_state.allowlist_state)
     }
 
-    // ========== CAPABILITY GRANTING ==========
+
     // Note: Grant functions transfer TreasuryCap/DenyCap 
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
@@ -301,7 +301,7 @@ module move_cmtat::allowlist_cmtat {
         transfer::public_transfer(allowlist_cap, to);
     }
 
-    // ========== CAPABILITY REVOKING ==========
+
     public entry fun revoke_minter(
         _admin_cap: &AdminCap,
         minter_cap: MintCap,
@@ -350,7 +350,7 @@ module move_cmtat::allowlist_cmtat {
         object::delete(id);
     }
 
-    // ========== ADMINISTRATIVE FUNCTIONS ==========
+
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
@@ -466,7 +466,7 @@ module move_cmtat::allowlist_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== BURNING FUNCTIONS  ==========
+
     public fun burn(
         treasury_cap: &mut TreasuryCap<ALLOWLIST_CMTAT>,
         coins: Coin<ALLOWLIST_CMTAT>,
@@ -488,7 +488,7 @@ module move_cmtat::allowlist_cmtat {
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS  ==========
+
     public entry fun pause(
         deny_list: &mut DenyList,
         deny_cap: &mut DenyCapV1<ALLOWLIST_CMTAT>,
@@ -532,7 +532,7 @@ module move_cmtat::allowlist_cmtat {
         });
     }
 
-    // ========== FREEZE FUNCTIONS  ==========
+
     public entry fun set_address_frozen(
         deny_list: &mut DenyList,
         deny_cap: &mut DenyCapV1<ALLOWLIST_CMTAT>,
@@ -571,7 +571,7 @@ module move_cmtat::allowlist_cmtat {
         }
     }
 
-    // ========== ALLOWLIST FUNCTIONS ==========
+
     public entry fun enable_allowlist(
         _allowlist_cap: &AllowlistCap,
         compliance_state: &mut ComplianceState,
@@ -626,7 +626,7 @@ module move_cmtat::allowlist_cmtat {
         };
     }
 
-    // ========== ALLOWLIST REMOVAL FUNCTIONS ==========
+
 
     public fun get_allowlist_count(
         _allowlist_cap: &AllowlistCap,
@@ -686,7 +686,7 @@ module move_cmtat::allowlist_cmtat {
         });
     }
 
-    // ========== SNAPSHOT FUNCTIONS ==========
+
     public entry fun schedule_snapshot(
         _snapshot_cap: &SnapshotCap,
         state: &mut AllowlistCMTATState,
@@ -699,7 +699,7 @@ module move_cmtat::allowlist_cmtat {
         snapshot_engine::create_snapshot(&mut state.snapshot_engine, total_supply, timestamp, ctx);
     }
 
-    // ========== RULE ENGINE MANAGEMENT ==========
+
     public fun rule_engine_active(state: &AllowlistCMTATState): bool {
         state.rule_engine_active
     }
@@ -767,7 +767,7 @@ module move_cmtat::allowlist_cmtat {
         rule_engine_v2::set_time_limits(&mut state.rule_engine, approval_deadline_ms, execution_deadline_ms, ctx);
     }
 
-    // ========== RULE MANAGEMENT ==========
+
 
     public entry fun add_to_blacklist(
         _admin_cap: &AdminCap,
@@ -882,9 +882,10 @@ module move_cmtat::allowlist_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== TEST-ONLY ==========
+
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
         init(ALLOWLIST_CMTAT {}, ctx);
     }
 }
+

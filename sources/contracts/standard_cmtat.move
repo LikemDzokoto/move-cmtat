@@ -25,7 +25,7 @@ module move_cmtat::standard_cmtat {
         deactivated: bool,
     }
 
-    // ========== ENGINES ==========
+
     public struct StandardCMTATState has key {
         id: object::UID,
         snapshot_engine: snapshot_engine::SnapshotEngine,
@@ -41,7 +41,7 @@ module move_cmtat::standard_cmtat {
     public struct SnapshotCap has key, store { id: object::UID }
     public struct EnforcerCap has key, store { id: object::UID }
 
-    // ========== EVENTS ==========
+
     public struct TokenMinted has copy, drop {
         minter: address,
         to: address,
@@ -104,7 +104,7 @@ module move_cmtat::standard_cmtat {
         admin: address,
     }
 
-    // ========== ERRORS ==========
+
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
@@ -112,7 +112,7 @@ module move_cmtat::standard_cmtat {
     const ERuleEngineAlreadyActive: u64 = 4;
 
 
-    // ========== INIT FUNCTION ==========
+
     fun init(witness: STANDARD_CMTAT, ctx: &mut tx_context::TxContext) {
        
         let (treasury_cap, deny_cap, coin_metadata) = coin::create_regulated_currency_v1(
@@ -192,7 +192,7 @@ module move_cmtat::standard_cmtat {
         coin::total_supply(treasury_cap)
     }
 
-    // ========== CMTAT REGISTRY VIEWS ==========
+
     public fun terms(registry: &CMTATRegistry): String { registry.terms }
     public fun information(registry: &CMTATRegistry): String { registry.information }
     public fun token_id(registry: &CMTATRegistry): String { registry.token_id }
@@ -213,7 +213,7 @@ module move_cmtat::standard_cmtat {
         rule_engine_v2::message_for_restriction_code(code)
     }
 
-    // ========== CAPABILITY GRANTING ==========
+
  
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
@@ -268,7 +268,7 @@ module move_cmtat::standard_cmtat {
         transfer::transfer(snapshot_cap, to);
     }
 
-    // ========== ADMINISTRATIVE FUNCTIONS ==========
+
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut CMTATRegistry,
@@ -329,7 +329,7 @@ module move_cmtat::standard_cmtat {
         });
     }
 
-    // ========== MINTING FUNCTIONS ==========
+
     public fun mint(
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         registry: &CMTATRegistry,
@@ -381,7 +381,7 @@ module move_cmtat::standard_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== BURNING FUNCTIONS ==========
+
     public fun burn(
         treasury_cap: &mut TreasuryCap<STANDARD_CMTAT>,
         coins: Coin<STANDARD_CMTAT>,
@@ -409,7 +409,7 @@ module move_cmtat::standard_cmtat {
         burn(treasury_cap, coins, ctx);
     }
 
-    // ========== PAUSE FUNCTIONS  ==========
+
     public entry fun pause(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
@@ -453,7 +453,7 @@ module move_cmtat::standard_cmtat {
         });
     }
 
-    // ========== FREEZE FUNCTIONS  ==========
+
     public entry fun set_address_frozen(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<STANDARD_CMTAT>,
@@ -493,7 +493,7 @@ module move_cmtat::standard_cmtat {
         }
     }
 
-    // ========== SNAPSHOT FUNCTIONS ==========
+
     public entry fun schedule_snapshot(
         _snapshot_cap: &SnapshotCap,
         state: &mut StandardCMTATState,
@@ -506,7 +506,7 @@ module move_cmtat::standard_cmtat {
         snapshot_engine::create_snapshot(&mut state.snapshot_engine, total_supply, timestamp, ctx);
     }
 
-    // ========== RULE ENGINE MANAGEMENT ==========
+
     public fun rule_engine_active(state: &StandardCMTATState): bool {
         state.rule_engine_active
     }
@@ -574,7 +574,7 @@ module move_cmtat::standard_cmtat {
         rule_engine_v2::set_time_limits(&mut state.rule_engine, approval_deadline_ms, execution_deadline_ms, ctx);
     }
 
-    // ========== RULE MANAGEMENT ==========
+
 
     public entry fun add_to_blacklist(
         _admin_cap: &AdminCap,
@@ -685,9 +685,10 @@ module move_cmtat::standard_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== TEST-ONLY ==========
+
     #[test_only]
     public fun init_for_testing(ctx: &mut tx_context::TxContext) {
         init(STANDARD_CMTAT {}, ctx);
     }
 }
+

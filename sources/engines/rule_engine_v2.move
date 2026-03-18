@@ -8,20 +8,20 @@ module move_cmtat::rule_engine_v2 {
     use iota::event;
     use std::string::{Self, String};
 
-    // ============ RULE TYPES ============
+
     const RULE_WHITELIST: u8 = 1;
     const RULE_CONDITIONAL_TRANSFER: u8 = 2;
     const RULE_BLACKLIST: u8 = 3;
     const RULE_SANCTION_LIST: u8 = 4;
 
-    // ============ STATUS CONSTANTS ============
+
     const STATUS_NONE: u8 = 0;
     const STATUS_WAITING: u8 = 1;
     const STATUS_APPROVED: u8 = 2;
     const STATUS_DENIED: u8 = 3;
     const STATUS_EXECUTED: u8 = 4;
 
-    // ============ RESTRICTION CODES ============
+
     const CODE_VALID: u8 = 0;
     const CODE_PAUSED: u8 = 1;
     const CODE_FROZEN_SENDER: u8 = 2;
@@ -37,7 +37,7 @@ module move_cmtat::rule_engine_v2 {
     const CODE_REQUEST_EXPIRED: u8 = 13;
     const CODE_ALREADY_EXECUTED: u8 = 14;
 
-    // ============ ERROR CODES ============
+
     const ERequestAlreadyExists: u64 = 600;
     const ERequestNotFound: u64 = 601;
     const ENotWaiting: u64 = 602;
@@ -47,11 +47,11 @@ module move_cmtat::rule_engine_v2 {
     const ETransferRestricted: u64 = 607;
     const EInvalidMaxBalance: u64 = 608;
 
-    // ============ DEFAULT TIME LIMITS ============
+
     const DEFAULT_APPROVAL_DEADLINE_MS: u64 = 90 * 24 * 60 * 60 * 1000;
     const DEFAULT_EXECUTION_DEADLINE_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
-    // ============ DATA STRUCTURES ============
+
 
     public struct TransferConfig has store, drop, copy {
         auto_approval_enabled: bool,
@@ -85,7 +85,7 @@ module move_cmtat::rule_engine_v2 {
         operator: address,
     }
 
-    // ============ EVENTS ============
+
 
     public struct RuleAdded has copy, drop {
         operator: address,
@@ -161,7 +161,7 @@ module move_cmtat::rule_engine_v2 {
         executed_at: u64,
     }
 
-    // ============ INITIALIZATION ============
+
 
     public fun init_rule_engine_v2(
         ctx: &mut tx_context::TxContext
@@ -185,7 +185,7 @@ module move_cmtat::rule_engine_v2 {
         engine
     }
 
-    // ============ RESTRICTION CODE GETTERS ============
+
 
     public fun restriction_code_valid(): u8 { CODE_VALID }
     public fun restriction_code_paused(): u8 { CODE_PAUSED }
@@ -238,7 +238,7 @@ module move_cmtat::rule_engine_v2 {
         }
     }
 
-    // ============ KEY GENERATION ============
+
 
     fun generate_request_key(from: address, to: address, value: u64): vector<u8> {
         let mut key = from.to_bytes();
@@ -260,7 +260,7 @@ module move_cmtat::rule_engine_v2 {
         bytes
     }
 
-    // ============ RULE MANAGEMENT ============
+
 
     public fun is_rule_enabled(rule_engine: &RuleEngine, rule_type: u8): bool {
         vec_map::contains(&rule_engine.rules, &rule_type)
@@ -296,7 +296,7 @@ module move_cmtat::rule_engine_v2 {
         event::emit(RuleRemoved { operator, rule_type });
     }
 
-    // ============ VIP MANAGEMENT ============
+
 
     public fun is_vip(rule_engine: &RuleEngine, account: address): bool {
         table::contains(&rule_engine.vip_list, account)
@@ -332,7 +332,7 @@ module move_cmtat::rule_engine_v2 {
         event::emit(VipRemoved { operator, account });
     }
 
-    // ============ BLACKLIST FUNCTIONS ============
+
 
     public fun is_blacklisted(rule_engine: &RuleEngine, account: address): bool {
         table::contains(&rule_engine.blacklist, account)
@@ -368,7 +368,7 @@ module move_cmtat::rule_engine_v2 {
         event::emit(BlacklistUpdated { operator, account, added: false });
     }
 
-    // ============ SANCTION LIST FUNCTIONS ============
+
 
     public fun is_sanctioned(rule_engine: &RuleEngine, account: address): bool {
         table::contains(&rule_engine.sanction_list, account)
@@ -404,7 +404,7 @@ module move_cmtat::rule_engine_v2 {
         event::emit(SanctionListUpdated { operator, account, added: false });
     }
 
-    // ============ MAX BALANCE FUNCTIONS ============
+
 
     public fun get_max_balance(rule_engine: &RuleEngine): u64 {
         rule_engine.config.max_balance
@@ -424,7 +424,7 @@ module move_cmtat::rule_engine_v2 {
         event::emit(MaxBalanceUpdated { operator, max_balance });
     }
 
-    // ============ TRANSFER REQUEST LIFECYCLE ============
+
 
     public entry fun create_transfer_request(
         rule_engine: &mut RuleEngine,
@@ -556,7 +556,7 @@ module move_cmtat::rule_engine_v2 {
         });
     }
 
-    // ============ VALIDATION FUNCTIONS ============
+
 
     public fun validate_transfer(
         rule_engine: &RuleEngine,
@@ -682,7 +682,7 @@ module move_cmtat::rule_engine_v2 {
         assert!(code == CODE_VALID, ETransferRestricted)
     }
 
-    // ============ QUERY FUNCTIONS ============
+
 
     public fun get_request_status(
         rule_engine: &RuleEngine,
@@ -726,7 +726,7 @@ module move_cmtat::rule_engine_v2 {
         rule_engine.request_counter
     }
 
-    // ============ CONFIGURATION FUNCTIONS ============
+
 
     public entry fun set_auto_approval(
         rule_engine: &mut RuleEngine,
@@ -760,7 +760,7 @@ module move_cmtat::rule_engine_v2 {
         rule_engine.operator = new_operator;
     }
 
-    // ============ STATUS CONSTANT GETTERS ============
+
 
     public fun status_none(): u8 { STATUS_NONE }
     public fun status_waiting(): u8 { STATUS_WAITING }
@@ -768,10 +768,11 @@ module move_cmtat::rule_engine_v2 {
     public fun status_denied(): u8 { STATUS_DENIED }
     public fun status_executed(): u8 { STATUS_EXECUTED }
 
-    // ============ RULE TYPE GETTERS ============
+
 
     public fun rule_whitelist(): u8 { RULE_WHITELIST }
     public fun rule_conditional_transfer(): u8 { RULE_CONDITIONAL_TRANSFER }
     public fun rule_blacklist(): u8 { RULE_BLACKLIST }
     public fun rule_sanction_list(): u8 { RULE_SANCTION_LIST }
 }
+

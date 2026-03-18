@@ -7,13 +7,13 @@ module move_cmtat::snapshot_engine {
     use iota::vec_map::{Self, VecMap};
     use std::vector;
 
-    /// Errors
+
     const ESnapshotNotFound: u64 = 700;
     const EAccountNotFound: u64 = 701;
     const EInvalidSnapshotId: u64 = 702;
     const EBalanceAlreadyRecorded: u64 = 703;
 
-    /// Snapshot data structure
+
     public struct Snapshot has store, drop, copy {
         id: u64,
         timestamp: u64,           // Unix timestamp in seconds
@@ -28,7 +28,7 @@ module move_cmtat::snapshot_engine {
         _balance: u64,
     }
 
-    /// Snapshot engine state
+
     public struct SnapshotEngine has key, store {
         id: UID,
         snapshot_counter: u64,
@@ -39,9 +39,9 @@ module move_cmtat::snapshot_engine {
         completed_snapshots: Table<u64, bool>,
     }
 
-    // ========== INITIALIZATION ==========
 
-    /// Initialize snapshot engine
+
+
     public fun init_snapshot_engine(ctx: &mut TxContext): SnapshotEngine {
         SnapshotEngine {
             id: object::new(ctx),
@@ -52,7 +52,7 @@ module move_cmtat::snapshot_engine {
         }
     }
 
-    // ========== SNAPSHOT CREATION ==========
+
 
     /// Create new snapshot with current total supply
     public fun create_snapshot(
@@ -72,7 +72,7 @@ module move_cmtat::snapshot_engine {
             description: vector::empty(),
         };
 
-        // Store snapshot
+
         vec_map::insert(&mut engine.snapshots, snapshot_id, snapshot);
 
         // Create balance table for this snapshot
@@ -113,7 +113,7 @@ module move_cmtat::snapshot_engine {
         snapshot_id
     }
 
-    // ========== BALANCE RECORDING ==========
+
 
     /// Record balance for specific account at snapshot
     public fun record_balance_at_snapshot(
@@ -123,7 +123,7 @@ module move_cmtat::snapshot_engine {
         balance: u64,
         _ctx: &mut TxContext
     ) {
-        // Verify snapshot exists
+
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
 
         // Get balance table for this snapshot
@@ -169,7 +169,7 @@ module move_cmtat::snapshot_engine {
         *completed = true;
     }
 
-    // ========== BALANCE QUERIES ==========
+
 
     /// Get balance for specific account at snapshot
     public fun get_balance_at_snapshot(
@@ -177,10 +177,10 @@ module move_cmtat::snapshot_engine {
         snapshot_id: u64,
         account: address
     ): u64 {
-        // Verify snapshot exists
+
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
 
-        // Get balance table
+
         let balance_table = table::borrow(&engine.balances, snapshot_id);
 
         // Return balance or 0 if not found
@@ -220,13 +220,13 @@ module move_cmtat::snapshot_engine {
         accounts
     }
 
-    // ========== SNAPSHOT QUERIES ==========
 
-    /// Get snapshot data
+
+
     public fun get_snapshot(
         engine: &SnapshotEngine,
         snapshot_id: u64
-    ): (u64, u64, u64) {  // (id, timestamp, total_supply)
+    ): (u64, u64, u64) {
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
 
         let snapshot = vec_map::get(&engine.snapshots, &snapshot_id);
@@ -253,7 +253,7 @@ module move_cmtat::snapshot_engine {
         snapshot.total_supply
     }
 
-    /// Get snapshot timestamp
+
     public fun get_snapshot_timestamp(
         engine: &SnapshotEngine,
         snapshot_id: u64
@@ -292,7 +292,7 @@ module move_cmtat::snapshot_engine {
         engine.snapshot_counter - 1
     }
 
-    /// Get snapshot count
+
     public fun get_snapshot_count(engine: &SnapshotEngine): u64 {
         engine.snapshot_counter
     }
@@ -312,7 +312,7 @@ module move_cmtat::snapshot_engine {
         ids
     }
 
-    // ========== UTILITY FUNCTIONS ==========
+
 
     /// Calculate proportional share of distribution
     /// Returns amount * (account_balance / total_supply)
@@ -379,9 +379,9 @@ module move_cmtat::snapshot_engine {
         ids
     }
 
-    // ========== SNAPSHOT MANAGEMENT ==========
 
-    /// Update snapshot description
+
+
     public fun update_snapshot_description(
         engine: &mut SnapshotEngine,
         snapshot_id: u64,
@@ -405,9 +405,9 @@ module move_cmtat::snapshot_engine {
         snapshot.block_number = block_number;
     }
 
-    // ========== VALIDATION ==========
 
-    /// Require snapshot exists
+
+
     public fun require_snapshot_exists(engine: &SnapshotEngine, snapshot_id: u64) {
         assert!(snapshot_exists(engine, snapshot_id), ESnapshotNotFound);
     }
@@ -422,3 +422,4 @@ module move_cmtat::snapshot_engine {
         assert!(has_balance_at_snapshot(engine, snapshot_id, account), EAccountNotFound);
     }
 }
+

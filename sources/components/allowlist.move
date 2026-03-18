@@ -26,7 +26,7 @@ module move_cmtat::allowlist {
         state.enabled
     }
 
-    /// Enable/disable allowlist
+
     public fun set_enabled(state: &mut AllowlistState, enabled: bool) {
         state.enabled = enabled;
     }
@@ -121,3 +121,4 @@ module move_cmtat::allowlist {
         }
     }
 }
+

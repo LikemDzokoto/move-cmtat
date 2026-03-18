@@ -10,7 +10,7 @@ module move_cmtat::debt_engine {
     use iota::tx_context::{Self, TxContext};
     use move_cmtat::debt::{Self, DebtIdentifier, DebtInstrument, CreditEvents, BondTerms};
 
-    // ========== ERRORS ==========
+
     
     const ETokenNotRegistered: u64 = 900;
     const ETokenAlreadyRegistered: u64 = 901;
@@ -18,7 +18,7 @@ module move_cmtat::debt_engine {
     const EUnauthorized: u64 = 903;
     const EInvalidDebtData: u64 = 904;
 
-    // ========== STRUCTS ==========
+
     
     /// Aggregated debt data for a token
     public struct TokenDebtData has copy, drop, store {
@@ -30,10 +30,10 @@ module move_cmtat::debt_engine {
         last_updated: u64,
     }
 
-    /// Debt engine state
+
     public struct DebtEngineState has key, store {
         id: UID,
-        token_debt_data: Table<address, TokenDebtData>,  // token_address -> TokenDebtData
+        token_debt_data: Table<address, TokenDebtData>,
         supported_tokens: vector<address>,
         admin_address: address,
     }
@@ -44,7 +44,7 @@ module move_cmtat::debt_engine {
         engine_id: address,
     }
 
-    // ========== EVENTS ==========
+
     
     public struct TokenRegistered has copy, drop {
         token_address: address,
@@ -73,9 +73,9 @@ module move_cmtat::debt_engine {
         timestamp: u64,
     }
 
-    // ========== INITIALIZATION ==========
+
     
-    /// Initialize debt engine
+
     fun init(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         
@@ -114,7 +114,7 @@ module move_cmtat::debt_engine {
         (state, admin_cap)
     }
 
-    // ========== TOKEN REGISTRATION ==========
+
     
     /// Register a new token with the debt engine
     public fun register_token(
@@ -140,11 +140,11 @@ module move_cmtat::debt_engine {
             last_updated: current_time,
         };
 
-        // Store debt data
+
         table::add(&mut state.token_debt_data, token_address, debt_data);
         vector::push_back(&mut state.supported_tokens, token_address);
 
-        // Emit event
+
         event::emit(TokenRegistered {
             token_address,
             registered_by: tx_context::sender(ctx),
@@ -213,7 +213,7 @@ module move_cmtat::debt_engine {
         });
     }
 
-    // ========== DATA UPDATES ==========
+
     
     /// Update token debt identifier
     public fun update_token_identifier(
@@ -307,7 +307,7 @@ module move_cmtat::debt_engine {
         });
     }
 
-    // ========== CREDIT EVENT OPERATIONS ==========
+
     
     /// Flag token as in default
     public fun flag_token_default(
@@ -423,7 +423,7 @@ module move_cmtat::debt_engine {
         });
     }
 
-    /// Record principal distribution
+
     public fun record_token_principal_distribution(
         _admin_cap: &DebtEngineAdminCap,
         state: &mut DebtEngineState,
@@ -441,7 +441,7 @@ module move_cmtat::debt_engine {
         debt_data.last_updated = clock.timestamp_ms();
     }
 
-    // ========== QUERIES ==========
+
     
     /// Get full debt data for a token
     public fun get_token_debt_data(
@@ -469,7 +469,7 @@ module move_cmtat::debt_engine {
         table::contains(&state.token_debt_data, token_address)
     }
 
-    /// Get token identifier
+
     public fun get_token_identifier(
         state: &DebtEngineState,
         token_address: address
@@ -478,7 +478,7 @@ module move_cmtat::debt_engine {
         table::borrow(&state.token_debt_data, token_address).identifier
     }
 
-    /// Get token instrument
+
     public fun get_token_instrument(
         state: &DebtEngineState,
         token_address: address
@@ -594,7 +594,7 @@ module move_cmtat::debt_engine {
         debt::instrument_get_maturity_date(&get_token_instrument(state, token_address))
     }
 
-    // ========== VALIDATION ==========
+
     
     /// Require token is registered
     public fun require_token_registered(state: &DebtEngineState, token_address: address) {
@@ -611,9 +611,9 @@ module move_cmtat::debt_engine {
         assert!(!is_token_redeemed(state, token_address), EInvalidDebtData);
     }
 
-    // ========== ADMIN FUNCTIONS ==========
+
     
-    /// Transfer admin capability
+
     public entry fun transfer_admin_cap(
         admin_cap: DebtEngineAdminCap,
         new_admin: address
@@ -621,7 +621,7 @@ module move_cmtat::debt_engine {
         transfer::transfer(admin_cap, new_admin);
     }
 
-    /// Update admin address
+
     public entry fun update_admin_address(
         _admin_cap: &DebtEngineAdminCap,
         state: &mut DebtEngineState,
@@ -630,12 +630,12 @@ module move_cmtat::debt_engine {
         state.admin_address = new_admin;
     }
 
-    /// Get admin address
+
     public fun get_admin_address(state: &DebtEngineState): address {
         state.admin_address
     }
 
-    // ========== HELPER FUNCTIONS ==========
+
 
     /// Batch update multiple tokens
     public fun batch_update_credit_events(
@@ -658,7 +658,7 @@ module move_cmtat::debt_engine {
         }
     }
 
-    /// Get engine statistics
+
     public fun get_engine_stats(state: &DebtEngineState): (u64, u64, u64) {
         let total = get_token_count(state);
         let mut defaulted = 0;
@@ -679,3 +679,4 @@ module move_cmtat::debt_engine {
         (total, defaulted, redeemed)
     }
 }
+

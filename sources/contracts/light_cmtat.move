@@ -27,7 +27,7 @@ module move_cmtat::light_cmtat {
         id: object::UID,
     }
 
-    // ========== REGISTRY ==========
+
     public struct LightCMTATRegistry has key {
         id: object::UID,
         terms: String,
@@ -36,7 +36,7 @@ module move_cmtat::light_cmtat {
         deactivated: bool,
     }
 
-    // ========== EVENTS ==========
+
     public struct TokenMinted has copy, drop {
         minter: address,
         to: address,
@@ -86,7 +86,7 @@ module move_cmtat::light_cmtat {
         new_token_id: String,
     }
 
-    // ========== ERRORS ==========
+
     const EModuleDeactivated: u64 = 0;
     const EAddressFrozen: u64 = 1;
     const EModulePaused: u64 = 2;
@@ -133,7 +133,7 @@ module move_cmtat::light_cmtat {
         transfer::share_object(registry);
     }
 
-    // ========== CAPABILITY GRANTING ==========
+
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         treasury_cap: TreasuryCap<LIGHT_CMTAT>,
@@ -167,7 +167,7 @@ module move_cmtat::light_cmtat {
         transfer::public_transfer(deny_cap, to);
     }
 
-    // ========== VIEW FUNCTIONS ==========
+
     public fun name(metadata: &CoinMetadata<LIGHT_CMTAT>): String {
         coin::get_name(metadata)
     }
@@ -211,13 +211,13 @@ module move_cmtat::light_cmtat {
         coin::deny_list_v1_contains_current_epoch<LIGHT_CMTAT>(deny_list, account, ctx)
     }
 
-    // ========== ROLE GETTERS ==========
+
     public fun get_default_admin_role(): vector<u8> { b"DEFAULT_ADMIN_ROLE" }
     public fun get_minter_role(): vector<u8> { b"MINTER_ROLE" }
     public fun get_pauser_role(): vector<u8> { b"PAUSER_ROLE" }
     public fun get_enforcer_role(): vector<u8> { b"ENFORCER_ROLE" }
 
-    // ========== ADMINISTRATIVE FUNCTIONS ==========
+
     public entry fun set_terms(
         _admin_cap: &AdminCap,
         registry: &mut LightCMTATRegistry,
@@ -263,7 +263,7 @@ module move_cmtat::light_cmtat {
         });
     }
 
-    // ========== MINTING FUNCTIONS ==========
+
     public fun mint(
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         registry: &LightCMTATRegistry,
@@ -322,7 +322,7 @@ module move_cmtat::light_cmtat {
         }
     }
 
-    // ========== BURNING FUNCTIONS ==========
+
     public fun burn(
         treasury_cap: &mut TreasuryCap<LIGHT_CMTAT>,
         coins: Coin<LIGHT_CMTAT>,
@@ -412,7 +412,7 @@ module move_cmtat::light_cmtat {
         transfer::public_transfer(mint_coins, mint_to);
     }
 
-    // ========== TRANSFER FUNCTION ==========
+
     public entry fun transfer(
         registry: &LightCMTATRegistry,
         deny_list: &deny_list::DenyList,
@@ -430,7 +430,7 @@ module move_cmtat::light_cmtat {
         transfer::public_transfer(coins, to);
     }
 
-    // ========== FREEZE FUNCTIONS ==========
+
     public entry fun set_address_frozen(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
@@ -470,7 +470,7 @@ module move_cmtat::light_cmtat {
         }
     }
 
-    // ========== PAUSE FUNCTIONS ==========
+
     public entry fun pause(
         deny_list: &mut deny_list::DenyList,
         deny_cap: &mut DenyCapV1<LIGHT_CMTAT>,
@@ -501,7 +501,7 @@ module move_cmtat::light_cmtat {
         });
     }
 
-    // ========== DEACTIVATION ==========
+
     public entry fun deactivate_contract(
         _admin_cap: &AdminCap,
         registry: &mut LightCMTATRegistry,
@@ -518,12 +518,13 @@ module move_cmtat::light_cmtat {
         });
     }
 
-    // ========== TEST-ONLY ==========
+
     #[test_only]
     public fun init_for_testing(ctx: &mut tx_context::TxContext) {
         init(LIGHT_CMTAT {}, ctx);
     }
 }
+
 
 
 
