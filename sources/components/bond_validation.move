@@ -270,7 +270,7 @@ module move_cmtat::bond_validation {
 
     
     /// Adjust date for business day convention
-    /// Note:  Full implementation would need external oracle for business days
+    /// Full implementation would need external oracle for business days
     
     public fun adjust_for_business_day(
         date: u64,

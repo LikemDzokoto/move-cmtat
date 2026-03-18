@@ -2,7 +2,7 @@
 
 > A native IOTA Move implementation of Switzerland's Capital Markets Technology Association token standard
 
-**⚠️ WORK IN PROGRESS - ~85% CMTAT Compliant**
+
 
 This project implements the CMTAT security token standard natively in IOTA Move, leveraging IOTA's object model and native token architecture for superior security and compliance capabilities.
 
@@ -36,39 +36,29 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 - Native DenyList integration for pause/freeze enforcement
 - Batch operations for administrative efficiency
 
-**Compliance Engines (Implemented & Tested):**
-
-| Engine | Status | Description |
-|--------|--------|-------------|
-| **RuleEngine v2** | ✅ Ready | Hierarchical rule validation with VIP support, conditional transfers, approval workflows |
-| **Snapshot Engine** | ✅ Integrated | Balance snapshots with timestamp tracking |
-| **Interest Engine** | ✅ Ready | Coupon schedules, interest calculations, payment tracking |
-| **Debt Engine** | ✅ Ready | Multi-token debt instrument management |
-| **Bond Validation** | ✅ Ready | Day count conventions, accrued interest, coupon calculations |
+**Compliance Engines :**
+| Engine | Description |
+|--------|-------------|
+| **RuleEngine v2** | Hierarchical rule validation with VIP support, conditional transfers, approval workflows |
+| **Snapshot Engine** | Balance snapshots with timestamp tracking |
+| **Interest Engine** | Coupon schedules, interest calculations, payment tracking |
+| **Debt Engine** | Multi-token debt instrument management |
+| **Bond Validation** | Day count conventions, accrued interest, coupon calculations |
 
 **State Components:**
 - **Allowlist** - Whitelist management with enable/disable
-- **Document Registry** - CMTAT compliant document management (comprehensive implementation)
 - **Debt** - Full debt instrument with identifier, instrument, bond terms, credit events
 
-### ⚠️ Integration Work Required
 
-The following components are fully implemented and tested and are now integrated into the token contracts:
 
-- **RuleEngine v2** - ✅ Fully integrated into standard_cmtat, allowlist_cmtat, and debt_cmtat
-- **Document Registry** - Component exists but not yet integrated into contract state
-- **Debt Module** - Basic structure complete, needs enhancement with full instrument fields
-
-### 🔴 Critical Features In Development
+### Critical Features In Development
 
 **Regulatory Compliance Requirements:**
 
 1. **Forced Transfer System** - Court order enforcement, regulatory seizures, legally required for securities
 2. **Partial Token Freezing** - Granular balance freezing for collateral, lending, margin requirements
-3. **Document Registry Integration** - Connect document component to contract state for legal document linking
-4. **RuleEngine Integration** - Wire rule validation into transfer functions for complex compliance
+3. **RuleEngine Integration** - Wire rule validation into transfer functions for complex compliance
 
-These features are required for full CMTAT compliance and production securities deployment.
 
 ---
 
@@ -153,7 +143,6 @@ move-cmtat/
 │   ├── components/             # State components
 │   │   ├── allowlist.move      # Whitelist functionality
 │   │   ├── debt.move           # Debt instrument data
-│   │   ├── document_registry.move # Document management
 │   │   └── bond_validation.move   # Bond calculations
 │   │
 │   └── interfaces/
@@ -282,9 +271,6 @@ Four contract implementations offering different feature sets:
 - Collateral locking for lending
 - Margin requirement enforcement
 
-**Document Registry Integration:**
-- CMTAT compliant document management
-- Legal document linking (prospectus, indenture)
 
 ---
 
@@ -527,7 +513,6 @@ Supported networks:
 
 ## CMTAT Compliance
 
-### Current Compliance: ~85%
 
 **Fully Compliant Areas:**
 - Core token functionality (via native Coin<T>)
@@ -541,8 +526,7 @@ Supported networks:
 - Debt tracking (full instrument, maturity, redemption)
 - Claim-based interest distribution
 
-**Partial Compliance:**
-- Document management (component ready but not integrated)
+
 
 **Critical Gaps:**
 - Forced transfer (regulatory requirement)
@@ -560,7 +544,6 @@ Supported networks:
 **Missing for Full Compliance:**
 - Forced transfer system
 - Partial balance freezing
-- Document registry integration
 - RuleEngine contract integration
 
 ---
@@ -573,10 +556,9 @@ Implement regulatory requirements for production securities deployment:
 
 1. **Forced Transfer System** - Court orders, regulatory seizures
 2. **Partial Token Freezing** - Collateral, lending, margin requirements
-3. **Document Registry Integration** - Legal document linking
-4. **RuleEngine Integration** - Complex compliance rules
-5. **Complete Debt Module** - Full instrument specification
-6. **Contract Consistency** - Standardize features across variants
+3. **RuleEngine Integration** - Complex compliance rules
+4. **Complete Debt Module** - Full instrument specification
+5. **Contract Consistency** - Standardize features across variants
 
 ### Phase 2: Production Hardening
 
@@ -612,4 +594,4 @@ Mozilla Public License 2.0 (MPL-2.0)
 
 *Built with IOTA Move native architecture for compliant securities*
 
-*Version 0.2.1 - Work in Progress (~85% CMTAT Compliant)*
+*Version 0.2.1*
