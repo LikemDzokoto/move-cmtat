@@ -147,18 +147,22 @@ move-cmtat/
 │   └── interfaces/
 │       └── icmtat.move         # Interface constants
 │
-└── tests/                      # Comprehensive test suite
-    ├── rule_engine_v2_tests.move
-    ├── snapshot_engine_tests.move
-    ├── interest_engine_tests.move
-    ├── debt_engine_tests.move
-    ├── light_cmtat_tests.move       # Contract unit tests
-    ├── allowlist_cmtat_tests.move   # Contract unit tests
-    ├── standard_cmtat_tests.move    # Contract unit tests
-    ├── debt_cmtat_tests.move        # Contract unit tests
-    ├── capability_tests.move        # Role/capability tests
-    └── integration_tests.move       # Cross-contract flow tests
+├── tests/                      # Comprehensive test suite
+│   ├── rule_engine_v2_tests.move
+│   ├── snapshot_engine_tests.move
+│   ├── interest_engine_tests.move
+│   ├── debt_engine_tests.move
+│   ├── light_cmtat_tests.move       # Contract unit tests
+│   ├── allowlist_cmtat_tests.move   # Contract unit tests
+│   ├── standard_cmtat_tests.move    # Contract unit tests
+│   ├── debt_cmtat_tests.move        # Contract unit tests
+│   ├── capability_tests.move        # Role/capability tests
+│   └── integration_tests.move       # Cross-contract flow tests
+│
+└── CHANGELOG.md                # Version history and release notes
 ```
+
+
 
 **Design Philosophy:**
 - **Separation of concerns** - Business logic (engines) separate from state (components) separate from contract orchestration
