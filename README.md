@@ -492,7 +492,7 @@ Supported networks:
 
 | Contract | Package ID | Status | IOTAScan |
 |----------|-----------|--------|----------|
-| **move-cmtat** (all variants) | `0x40f7600aaa2417f8541dc8219c4cb065ec38ac3c7539f79aee30eb9add594e0a` | ✅ Deployed & Verified | [View on IOTAScan](https://iotascan.com/testnet/object/0x40f7600aaa2417f8541dc8219c4cb065ec38ac3c7539f79aee30eb9add594e0a/contracts) |
+| **move-cmtat** (all variants) | `0x40f7600aaa2417f8541dc8219c4cb065ec38ac3c7539f79aee30eb9add594e0a` |  Deployed & Verified | [View on IOTAScan](https://iotascan.com/testnet/object/0x40f7600aaa2417f8541dc8219c4cb065ec38ac3c7539f79aee30eb9add594e0a/contracts) |
 
 **Transaction Details:**
 - **Network:** testnet
@@ -552,9 +552,8 @@ Implement regulatory requirements for production securities deployment:
 
 1. **Forced Transfer System** - Court orders, regulatory seizures
 2. **Partial Token Freezing** - Collateral, lending, margin requirements
-3. **RuleEngine Integration** - Complex compliance rules
-4. **Complete Debt Module** - Full instrument specification
-5. **Contract Consistency** - Standardize features across variants
+3. **Complete Debt Module** - Full instrument specification
+4. **Contract Consistency** - Standardize features across variants
 
 ### Phase 2: Production Hardening
 
