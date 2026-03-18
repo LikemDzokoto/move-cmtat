@@ -143,7 +143,6 @@ move-cmtat/
 │   ├── components/             # State components
 │   │   ├── allowlist.move      # Whitelist functionality
 │   │   ├── debt.move           # Debt instrument data
-│   │   └── bond_validation.move   # Bond calculations
 │   │
 │   └── interfaces/
 │       └── icmtat.move         # Interface constants
@@ -153,7 +152,6 @@ move-cmtat/
     ├── snapshot_engine_tests.move
     ├── interest_engine_tests.move
     ├── debt_engine_tests.move
-    ├── bond_validation_tests.move
     ├── light_cmtat_tests.move       # Contract unit tests
     ├── allowlist_cmtat_tests.move   # Contract unit tests
     ├── standard_cmtat_tests.move    # Contract unit tests
@@ -195,7 +193,6 @@ Four contract implementations offering different feature sets:
 **Debt Features:**
 - Debt Identifier (issuer name, ISIN, guarantor, holder representative)
 - Debt Instrument (interest rate, par value, maturity date, coupon frequency, day count conventions)
-- Bond Terms (call schedule, put schedule, sinking fund, collateral)
 - Credit Events (rating, default flag, redeemed flag, principal distributed)
 - Maturity Validation (transfers blocked when bond matures)
 - Redemption (allowed when matured or in default)
@@ -521,7 +518,6 @@ Supported networks:
 - Access control (capability-based)
 - Snapshot functionality
 - Interest calculations & coupon schedules
-- Bond validation
 - RuleEngine v2 (blacklist, sanction list, max balance, conditional transfers)
 - Debt tracking (full instrument, maturity, redemption)
 - Claim-based interest distribution
