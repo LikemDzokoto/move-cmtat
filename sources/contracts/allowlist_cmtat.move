@@ -236,7 +236,7 @@ module move_cmtat::allowlist_cmtat {
     }
 
 
-    // Note: Grant functions transfer TreasuryCap/DenyCap 
+    //  Grant functions transfer TreasuryCap/DenyCap 
     public entry fun grant_minter(
         _admin_cap: &AdminCap,
         treasury_cap: TreasuryCap<ALLOWLIST_CMTAT>,
