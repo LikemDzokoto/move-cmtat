@@ -43,7 +43,6 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 | **Snapshot Engine** | Balance snapshots with timestamp tracking |
 | **Interest Engine** | Coupon schedules, interest calculations, payment tracking |
 | **Debt Engine** | Multi-token debt instrument management |
-| **Bond Validation** | Day count conventions, accrued interest, coupon calculations |
 
 **State Components:**
 - **Allowlist** - Whitelist management with enable/disable
@@ -141,11 +140,9 @@ move-cmtat/
 │   │   └── debt_engine.move       # Debt management
 │   │
 │   ├── components/             # State components
-│   │   ├── allowlist.move      # Whitelist functionality
+│   │   ├── allowlist.move      # Whitelist functionality 
 │   │   ├── debt.move           # Debt instrument data
 │   │
-│   └── interfaces/
-│       └── icmtat.move         # Interface constants
 │
 ├── tests/                      # Comprehensive test suite
 │   ├── rule_engine_v2_tests.move
@@ -546,35 +543,8 @@ Supported networks:
 - Partial balance freezing
 - RuleEngine contract integration
 
----
 
-## Roadmap
 
-### Phase 1: Critical Compliance
-
-Implement regulatory requirements for production securities deployment:
-
-1. **Forced Transfer System** - Court orders, regulatory seizures
-2. **Partial Token Freezing** - Collateral, lending, margin requirements
-3. **Complete Debt Module** - Full instrument specification
-4. **Contract Consistency** - Standardize features across variants
-
-### Phase 2: Production Hardening
-
-- Comprehensive integration testing
-- Security audit
-- Performance optimization
-- Documentation
-- Mainnet deployment preparation
-
-### Phase 3: Advanced Features
-
-- Additional capability types
-- Enhanced metadata support
-- Business day calculations
-- Transfer hooks and callbacks
-
----
 
 ## License
 

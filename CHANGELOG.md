@@ -12,7 +12,7 @@
 ## Changed
 - Core contracts (`light_cmtat`, `allowlist_cmtat`, `debt_cmtat`, `standard_cmtat`) updated to align with native IOTA patterns and RuleEngine v2 enforcement.
 - Allowlist and capability granting flows refined for clearer admin control.
-- Debt and rule engine implementations refactored to remove legacy logic and unify validation paths.
+- Debt and rule engine implementations refactored to remove legacy logic and unify validation paths. 
 - Test suites reorganized and expanded to match the new engine architecture and contract integrations.
 - Deployment workflow updated to support skipping build, localnet convenience, verification, and interaction flows.
 
