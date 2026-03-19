@@ -50,15 +50,6 @@ Instead of managing balances in contract storage (EVM pattern), this implementat
 
 
 
-### Critical Features In Development
-
-**Regulatory Compliance Requirements:**
-
-1. **Forced Transfer System** - Court order enforcement, regulatory seizures, legally required for securities
-2. **Partial Token Freezing** - Granular balance freezing for collateral, lending, margin requirements
-3. **RuleEngine Integration** - Wire rule validation into transfer functions for complex compliance
-
-
 ---
 
 ## Architecture
@@ -92,6 +83,18 @@ public entry fun mint(
     coin::mint(treasury_cap, amount, ctx)
 }
 ```
+
+**Two-Tier Capability System:**
+```move
+// Core admin capabilities (full authority)
+TreasuryCap<TOKEN>     // Mint/burn (supply control)
+DenyCapV1<TOKEN>       // Pause/freeze (compliance control)
+
+// Delegated operational capabilities
+MintCap, BurnCap, PauseCap, EnforcerCap
+```
+
+The capability model separates administrative control from delegated operations, enabling fine-grained role assignment without compromising security.
 
 Capabilities provide superior security to EVM's role mappings:
 - No mapping lookups required
@@ -257,17 +260,7 @@ Four contract implementations offering different feature sets:
 - Prevents double-claiming via claims tracking table
 - Accrued interest calculations
 
-### In Development
 
-**Forced Transfer:**
-- Court order enforcement capability
-- Regulatory seizure support
-- Legally required for securities enforcement
-
-**Partial Token Freezing:**
-- Granular balance freezing (specific amounts)
-- Collateral locking for lending
-- Margin requirement enforcement
 
 
 ---
@@ -345,7 +338,7 @@ iota move test --filter rule_engine_v2
 iota move test --filter snapshot_engine
 ```
 
-**Test Status:** 220+ tests including 6 integration tests
+**Test Status:** 200+ tests including 6 integration tests
 
 ### Integration Tests
 
@@ -525,9 +518,12 @@ Supported networks:
 
 
 
-**Critical Gaps:**
-- Forced transfer (regulatory requirement)
-- Partial token freezing (collateral/lending)
+**In Development for Full Compliance:**
+- Forced transfer (regulatory requirement) -  Court order enforcement, regulatory seizures, legally required for securities
+
+- Partial token freezing  - Granular balance freezing for collateral, lending, margin requirements
+
+
 
 ### Comparison to Solidity Reference
 
@@ -537,12 +533,6 @@ Supported networks:
 - Capability-based security model
 - Parallel execution support
 - Type-safe by compiler
-
-**Missing for Full Compliance:**
-- Forced transfer system
-- Partial balance freezing
-- RuleEngine contract integration
-
 
 
 
