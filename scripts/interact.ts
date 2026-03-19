@@ -19,47 +19,25 @@ const defaultConfig: InteractConfig = {
 class TokenInteractor {
     private senderAddress: string;
     private config: InteractConfig;
-    private cliPath: string;
 
     constructor(config: InteractConfig) {
-        const path = require('path');
-        const fs = require('fs');
-        const projectRoot = process.cwd();
-        const localCli = path.join(projectRoot, 'iota');
-        const cliExists = fs.existsSync(localCli);
-        this.cliPath = cliExists ? localCli : 'iota';
-        this.useWindowsGitBash = process.env.SHELL?.startsWith('C:') || false;
-        if (this.useWindowsGitBash && this.cliPath.startsWith('/mnt/')) {
-            this.cliPath = this.toWinPath(this.cliPath);
-        } else if (!this.useWindowsGitBash && this.cliPath.startsWith('C:')) {
-            this.cliPath = this.toWSLPath(this.cliPath);
-        }
-        
         this.config = config;
+        this.verifyCliExists();
         this.switchNetwork(config.network);
         this.senderAddress = this.getCliActiveAddress();
         console.log(`📍 Signer Address (from CLI): ${this.senderAddress}`);
     }
 
-    private useWindowsGitBash: boolean = false;
-
-    private toWSLPath(winPath: string): string {
-        return winPath.replace(/^C:/, '/mnt/c').replace(/\\/g, '/');
-    }
-
-    private toWinPath(wslPath: string): string {
-        return wslPath.replace(/^\/mnt\/c/, 'C:').replace(/\//g, '\\');
-    }
-
-    private getIotaCmd(): string {
-        if (this.useWindowsGitBash && this.cliPath.startsWith('C:')) {
-            return '"' + this.cliPath + '"';
+    private verifyCliExists(): void {
+        const { execSync } = require('child_process');
+        try {
+            execSync('iota --version', { stdio: 'pipe' });
+        } catch {
+            console.error('\n❌ Error: "iota" CLI not found in PATH');
+            console.error('   Please install IOTA CLI and ensure it\'s in your PATH');
+            console.error('   Download: https://github.com/iotaledger/iota-cli/releases\n');
+            process.exit(1);
         }
-        return this.cliPath;
-    }
-
-    private getBashCmd(): string {
-        return '/usr/bin/bash';
     }
 
     private switchNetwork(network: string): void {
@@ -67,19 +45,17 @@ class TokenInteractor {
             return;
         }
         const { execSync } = require('child_process');
-        const execOptions = this.getExecOptions();
         try {
-            execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client switch --env ${network}"`, execOptions);
-        } catch (error) {
+            execSync(`iota client switch --env ${network}`, { stdio: 'pipe' });
+        } catch {
             // Ignore if already on the correct network
         }
     }
 
     private getCliActiveAddress(): string {
         const { execSync } = require('child_process');
-        const execOptions = this.getExecOptions();
         try {
-            const output = execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client active-address"`, execOptions).toString().trim();
+            const output = execSync('iota client active-address', { stdio: 'pipe' }).toString().trim();
             if (output && output.startsWith('0x')) {
                 return output;
             }
@@ -119,9 +95,8 @@ class TokenInteractor {
 
     private async getWalletBalance(address: string): Promise<number> {
         const { execSync } = require('child_process');
-        const execOptions = this.getExecOptions();
         try {
-            const output = execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client balance ${address}"`, execOptions).toString();
+            const output = execSync(`iota client balance ${address}`, { stdio: 'pipe' }).toString();
             const match = output.match(/(\d+)\s*mist/);
             if (match) return parseInt(match[1], 10);
             const plainMatch = output.match(/Total: (\d+)/);
@@ -134,10 +109,9 @@ class TokenInteractor {
 
     private async requestFaucet(address: string): Promise<void> {
         const { execSync } = require('child_process');
-        const execOptions = this.getExecOptions();
         try {
-            execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client switch --env testnet"`, execOptions);
-            const output = execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client faucet --address ${address}"`, execOptions).toString();
+            execSync('iota client switch --env testnet', { stdio: 'pipe' });
+            const output = execSync(`iota client faucet --address ${address}`, { stdio: 'pipe' }).toString();
             console.log(`   Faucet response: ${output.substring(0, 200)}`);
         } catch (error: any) {
             const output = error.stdout?.toString() || error.stderr?.toString() || error.message || '';
@@ -205,9 +179,9 @@ class TokenInteractor {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const denyListOrCap = objects.denyList || objects.denyCap || '0x0';
-        const args = `${objects.treasuryCap} ${objects.registry} ${denyListOrCap} ${this.config.recipient} ${this.config.amount}`;
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function mint_and_transfer --args ${args} --gas-budget 500000000"`;
+        const systemDenyList = '0x403';
+        const args = `${objects.treasuryCap} ${objects.registry} ${systemDenyList} ${this.config.recipient} ${this.config.amount}`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function mint_and_transfer --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -227,13 +201,67 @@ class TokenInteractor {
         }
     }
 
-    private async discoverTokenObjects(): Promise<{treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string}> {
+    private async getPackageDeployTransaction(): Promise<string | null> {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
-        const result: {treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string} = {};
+        try {
+            const output = execSync(`iota client object ${this.config.packageId} --json`, execOptions).toString();
+            const data = JSON.parse(output);
+            return data.previousTransaction || null;
+        } catch {
+            return null;
+        }
+    }
+
+    private async discoverSharedObjectsFromTx(result: any, txDigest: string): Promise<void> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        const packageId = this.config.packageId;
+
+        const registryTypes: Record<string, string> = {
+            light: 'LightCMTATRegistry',
+            allowlist: 'CMTATRegistry',
+            debt: 'CMTATRegistry',
+            standard: 'CMTATRegistry'
+        };
 
         try {
-            const output = execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client objects ${this.senderAddress} --json"`, execOptions).toString();
+            const output = execSync(`iota client tx-block ${txDigest} --json`, execOptions).toString();
+            const data = JSON.parse(output);
+            const changes = data.objectChanges || [];
+
+            for (const change of changes) {
+                if (change.type === 'created' && change.owner?.Shared) {
+                    const objType = change.objectType || '';
+                    if (objType.includes(packageId)) {
+                        if (objType.includes(registryTypes[this.config.variant])) {
+                            result.registry = change.objectId;
+                            console.log(`   Found Registry (shared): ${result.registry}`);
+                        }
+                        if (objType.includes('DenyList') && objType.includes(packageId)) {
+                            result.denyList = change.objectId;
+                            console.log(`   Found DenyList (shared): ${result.denyList}`);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.log('   Warning: Could not discover shared objects from transaction');
+        }
+    }
+
+    private async discoverTokenObjects(): Promise<{treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, txDigest?: string}> {
+        const { execSync } = require('child_process');
+        const execOptions = this.getExecOptions();
+        const result: {treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, txDigest?: string} = {};
+
+        result.txDigest = await this.getPackageDeployTransaction();
+        if (result.txDigest) {
+            await this.discoverSharedObjectsFromTx(result, result.txDigest);
+        }
+
+        try {
+            const output = execSync(`iota client objects ${this.senderAddress} --json`, execOptions).toString();
             let objects: any[];
             try {
                 objects = JSON.parse(output);
@@ -264,8 +292,14 @@ class TokenInteractor {
                     result.denyList = obj.data.objectId;
                     console.log(`   Found DenyList: ${result.denyList}`);
                 }
-                const registryPatterns = ['Registry', 'CMTATState', 'LightCMTATState', 'StandardCMTATState', 'DebtCMTATState', 'AllowlistCMTATState'];
-                if (!result.registry && registryPatterns.some(p => type.includes(p)) && type.includes(packageId)) {
+                const registryPatterns: Record<string, string[]> = {
+                    light: ['LightCMTATRegistry', 'Registry'],
+                    allowlist: ['AllowlistCMTATRegistry', 'Registry'],
+                    debt: ['DebtCMTATRegistry', 'Registry'],
+                    standard: ['StandardCMTATRegistry', 'Registry']
+                };
+                const patterns = registryPatterns[this.config.variant] || ['Registry'];
+                if (!result.registry && patterns.some(p => type.includes(p)) && type.includes(packageId)) {
                     result.registry = obj.data.objectId;
                     console.log(`   Found Registry: ${result.registry}`);
                 }
@@ -311,7 +345,14 @@ class TokenInteractor {
             console.log(`   Found DenyList: ${result.denyList}`);
         }
 
-        const registryRe = /"objectId":\s*"([^"]+)"[^}]*(Registry|CMTATState)/g;
+        const registryPatterns: Record<string, string> = {
+            light: 'LightCMTATRegistry',
+            allowlist: 'AllowlistCMTATRegistry',
+            debt: 'DebtCMTATRegistry',
+            standard: 'StandardCMTATRegistry'
+        };
+        const registryName = registryPatterns[this.config.variant] || 'Registry';
+        const registryRe = new RegExp(`"objectId":\\s*"([^"]+)"[^}]*${registryName}`, 'g');
         while ((match = registryRe.exec(output)) !== null && !result.registry) {
             if (match[0].includes(packageId)) {
                 result.registry = match[1];
@@ -351,7 +392,7 @@ class TokenInteractor {
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
         const args = `${objects.treasuryCap} ${this.config.amount}`;
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function burn --args ${args} --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function burn --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -379,7 +420,7 @@ class TokenInteractor {
 
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client transfer-iota --to ${this.config.recipient} --amount ${this.config.amount} --gas-budget 50000000"`;
+        const command = `iota client transfer-iota --to ${this.config.recipient} --amount ${this.config.amount} --gas-budget 50000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -403,7 +444,7 @@ class TokenInteractor {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function pause --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function pause --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -427,7 +468,7 @@ class TokenInteractor {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function unpause --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function unpause --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -456,7 +497,7 @@ class TokenInteractor {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function freeze --args ${this.config.address} --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function freeze --args ${this.config.address} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -485,7 +526,7 @@ class TokenInteractor {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function unfreeze --args ${this.config.address} --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function unfreeze --args ${this.config.address} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -521,7 +562,7 @@ class TokenInteractor {
             enforcer: 'ENFORCER_ROLE',
         };
         const roleName = roleMap[this.config.role.toLowerCase()] || this.config.role.toUpperCase();
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function grant_role --args ${this.config.address} ${roleName} --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function grant_role --args ${this.config.address} ${roleName} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -557,7 +598,7 @@ class TokenInteractor {
             enforcer: 'ENFORCER_ROLE',
         };
         const roleName = roleMap[this.config.role.toLowerCase()] || this.config.role.toUpperCase();
-        const command = `${this.getBashCmd()} -c "${this.getIotaCmd()} client call --package ${this.config.packageId} --module ${moduleName} --function revoke_role --args ${this.config.address} ${roleName} --gas-budget 500000000"`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function revoke_role --args ${this.config.address} ${roleName} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -593,7 +634,7 @@ class TokenInteractor {
         console.log(`   Variant: ${this.config.variant}`);
 
         try {
-            const output = execSync(`${this.getBashCmd()} -c "${this.getIotaCmd()} client objects ${this.config.packageId}"`, execOptions).toString();
+            const output = execSync(`iota client objects ${this.config.packageId}`, execOptions).toString();
             if (output.includes('TreasuryCap')) {
                 const match = output.match(/TreasuryCap<([^>]+)>/);
                 if (match) console.log(`   Coin Type: ${match[1]}`);
