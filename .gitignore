@@ -49,6 +49,7 @@ move-cmtat-threat-model.md
 .opencode/
 .swp
 
+run-interact.sh
 
 dist/
 

@@ -97,10 +97,12 @@ class TokenInteractor {
         const { execSync } = require('child_process');
         try {
             const output = execSync(`iota client balance ${address}`, { stdio: 'pipe' }).toString();
-            const match = output.match(/(\d+)\s*mist/);
+            const match = output.match(/balance.*?(\d+)\s+NANOS/i);
             if (match) return parseInt(match[1], 10);
-            const plainMatch = output.match(/Total: (\d+)/);
-            if (plainMatch) return parseInt(plainMatch[1], 10);
+            const rawMatch = output.match(/IOTA\s+(\d+)/);
+            if (rawMatch) return parseInt(rawMatch[1], 10);
+            const mistMatch = output.match(/(\d+)\s*mist/i);
+            if (mistMatch) return parseInt(mistMatch[1], 10);
             return 0;
         } catch (error) {
             return 0;
