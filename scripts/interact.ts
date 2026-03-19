@@ -182,8 +182,46 @@ class TokenInteractor {
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
         const systemDenyList = '0x403';
-        const args = `${objects.treasuryCap} ${objects.registry} ${systemDenyList} ${this.config.recipient} ${this.config.amount}`;
-        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function mint_and_transfer --args ${args} --gas-budget 500000000`;
+        const systemClock = '0x6';
+        
+        let args: string;
+        let functionName = 'mint_and_transfer';
+        
+        switch (this.config.variant) {
+            case 'light':
+                args = `${objects.treasuryCap} ${objects.registry} ${systemDenyList} ${this.config.recipient} ${this.config.amount}`;
+                break;
+            case 'standard':
+                if (!objects.state) {
+                    console.log('ERROR: StandardCMTATState not found.');
+                    process.exit(1);
+                }
+                args = `${objects.treasuryCap} ${objects.registry} ${objects.state} ${systemDenyList} ${systemClock} ${this.config.recipient} ${this.config.amount}`;
+                break;
+            case 'allowlist':
+                if (!objects.state) {
+                    console.log('ERROR: AllowlistCMTATState not found.');
+                    process.exit(1);
+                }
+                if (!objects.complianceState) {
+                    console.log('ERROR: ComplianceState not found.');
+                    process.exit(1);
+                }
+                args = `${objects.treasuryCap} ${objects.registry} ${objects.state} ${objects.complianceState} ${systemDenyList} ${systemClock} ${this.config.recipient} ${this.config.amount}`;
+                break;
+            case 'debt':
+                if (!objects.state) {
+                    console.log('ERROR: DebtCMTATState not found.');
+                    process.exit(1);
+                }
+                args = `${objects.treasuryCap} ${objects.registry} ${objects.state} ${systemDenyList} ${systemClock} ${this.config.recipient} ${this.config.amount}`;
+                break;
+            default:
+                console.log(`ERROR: Unknown variant: ${this.config.variant}`);
+                process.exit(1);
+        }
+        
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function ${functionName} --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -222,9 +260,16 @@ class TokenInteractor {
 
         const registryTypes: Record<string, string> = {
             light: 'LightCMTATRegistry',
-            allowlist: 'CMTATRegistry',
-            debt: 'CMTATRegistry',
-            standard: 'CMTATRegistry'
+            allowlist: 'allowlist_cmtat::CMTATRegistry',
+            debt: 'debt_cmtat::CMTATRegistry',
+            standard: 'standard_cmtat::CMTATRegistry'
+        };
+
+        const stateTypes: Record<string, string> = {
+            light: '',
+            allowlist: 'AllowlistCMTATState',
+            debt: 'DebtCMTATState',
+            standard: 'StandardCMTATState'
         };
 
         try {
@@ -240,7 +285,15 @@ class TokenInteractor {
                             result.registry = change.objectId;
                             console.log(`   Found Registry (shared): ${result.registry}`);
                         }
-                        if (objType.includes('DenyList') && objType.includes(packageId)) {
+                        if (stateTypes[this.config.variant] && objType.includes(stateTypes[this.config.variant])) {
+                            result.state = change.objectId;
+                            console.log(`   Found State (shared): ${result.state}`);
+                        }
+                        if (objType.includes('ComplianceState')) {
+                            result.complianceState = change.objectId;
+                            console.log(`   Found ComplianceState (shared): ${result.complianceState}`);
+                        }
+                        if (objType.includes('DenyList') && !objType.includes(packageId)) {
                             result.denyList = change.objectId;
                             console.log(`   Found DenyList (shared): ${result.denyList}`);
                         }
@@ -252,10 +305,10 @@ class TokenInteractor {
         }
     }
 
-    private async discoverTokenObjects(): Promise<{treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, txDigest?: string}> {
+    private async discoverTokenObjects(): Promise<{treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, state?: string, complianceState?: string, txDigest?: string}> {
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
-        const result: {treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, txDigest?: string} = {};
+        const result: {treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, state?: string, complianceState?: string, txDigest?: string} = {};
 
         result.txDigest = await this.getPackageDeployTransaction();
         if (result.txDigest) {
@@ -294,16 +347,31 @@ class TokenInteractor {
                     result.denyList = obj.data.objectId;
                     console.log(`   Found DenyList: ${result.denyList}`);
                 }
-                const registryPatterns: Record<string, string[]> = {
-                    light: ['LightCMTATRegistry', 'Registry'],
-                    allowlist: ['AllowlistCMTATRegistry', 'Registry'],
-                    debt: ['DebtCMTATRegistry', 'Registry'],
-                    standard: ['StandardCMTATRegistry', 'Registry']
+                const registryPatterns: Record<string, string> = {
+                    light: 'LightCMTATRegistry',
+                    allowlist: 'allowlist_cmtat::CMTATRegistry',
+                    debt: 'debt_cmtat::CMTATRegistry',
+                    standard: 'standard_cmtat::CMTATRegistry'
                 };
-                const patterns = registryPatterns[this.config.variant] || ['Registry'];
-                if (!result.registry && patterns.some(p => type.includes(p)) && type.includes(packageId)) {
+                const registryPattern = registryPatterns[this.config.variant];
+                if (!result.registry && type.includes(registryPattern) && type.includes(packageId)) {
                     result.registry = obj.data.objectId;
                     console.log(`   Found Registry: ${result.registry}`);
+                }
+                const statePatterns: Record<string, string> = {
+                    light: '',
+                    allowlist: 'AllowlistCMTATState',
+                    debt: 'DebtCMTATState',
+                    standard: 'StandardCMTATState'
+                };
+                const statePattern = statePatterns[this.config.variant];
+                if (statePattern && !result.state && type.includes(statePattern) && type.includes(packageId)) {
+                    result.state = obj.data.objectId;
+                    console.log(`   Found State: ${result.state}`);
+                }
+                if (!result.complianceState && type.includes('ComplianceState') && type.includes(packageId)) {
+                    result.complianceState = obj.data.objectId;
+                    console.log(`   Found ComplianceState: ${result.complianceState}`);
                 }
             }
         } catch (error) {
@@ -313,8 +381,8 @@ class TokenInteractor {
         return result;
     }
 
-    private async discoverTokenObjectsRegex(output: string): Promise<{treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string}> {
-        const result: {treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string} = {};
+    private async discoverTokenObjectsRegex(output: string): Promise<{treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, state?: string, complianceState?: string, txDigest?: string}> {
+        const result: {treasuryCap?: string, registry?: string, denyList?: string, denyCap?: string, state?: string, complianceState?: string, txDigest?: string} = {};
         const packageId = this.config.packageId;
         const coinTypes: Record<string, string> = {
             light: 'LIGHT_CMTAT',
@@ -349,16 +417,41 @@ class TokenInteractor {
 
         const registryPatterns: Record<string, string> = {
             light: 'LightCMTATRegistry',
-            allowlist: 'AllowlistCMTATRegistry',
-            debt: 'DebtCMTATRegistry',
-            standard: 'StandardCMTATRegistry'
+            allowlist: 'allowlist_cmtat::CMTATRegistry',
+            debt: 'debt_cmtat::CMTATRegistry',
+            standard: 'standard_cmtat::CMTATRegistry'
         };
-        const registryName = registryPatterns[this.config.variant] || 'Registry';
+        const registryName = registryPatterns[this.config.variant];
         const registryRe = new RegExp(`"objectId":\\s*"([^"]+)"[^}]*${registryName}`, 'g');
         while ((match = registryRe.exec(output)) !== null && !result.registry) {
             if (match[0].includes(packageId)) {
                 result.registry = match[1];
                 console.log(`   Found Registry: ${result.registry}`);
+            }
+        }
+
+        const statePatterns: Record<string, string> = {
+            light: '',
+            allowlist: 'AllowlistCMTATState',
+            debt: 'DebtCMTATState',
+            standard: 'StandardCMTATState'
+        };
+        const stateName = statePatterns[this.config.variant];
+        if (stateName) {
+            const stateRe = new RegExp(`"objectId":\\s*"([^"]+)"[^}]*${stateName}`, 'g');
+            while ((match = stateRe.exec(output)) !== null && !result.state) {
+                if (match[0].includes(packageId)) {
+                    result.state = match[1];
+                    console.log(`   Found State: ${result.state}`);
+                }
+            }
+        }
+
+        const complianceRe = /"objectId":\s*"([^"]+)"[^}]*ComplianceState/g;
+        while ((match = complianceRe.exec(output)) !== null && !result.complianceState) {
+            if (match[0].includes(packageId)) {
+                result.complianceState = match[1];
+                console.log(`   Found ComplianceState: ${result.complianceState}`);
             }
         }
 
@@ -422,7 +515,7 @@ class TokenInteractor {
 
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
-        const command = `iota client transfer-iota --to ${this.config.recipient} --amount ${this.config.amount} --gas-budget 50000000`;
+        const command = `iota client pay-iota --recipients ${this.config.recipient} --amounts ${this.config.amount} --gas-budget 50000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -443,10 +536,23 @@ class TokenInteractor {
     }
 
     private async pause(): Promise<void> {
+        const objects = await this.discoverTokenObjects();
+        
+        if (!objects.treasuryCap) {
+            console.log('ERROR: TreasuryCap not found.');
+            process.exit(1);
+        }
+        if (!objects.registry) {
+            console.log('ERROR: Registry not found.');
+            process.exit(1);
+        }
+
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function pause --gas-budget 500000000`;
+        const systemDenyList = '0x403';
+        const args = `${systemDenyList} ${objects.denyCap} ${objects.registry}`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function pause --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -467,10 +573,23 @@ class TokenInteractor {
     }
 
     private async unpause(): Promise<void> {
+        const objects = await this.discoverTokenObjects();
+        
+        if (!objects.treasuryCap) {
+            console.log('ERROR: TreasuryCap not found.');
+            process.exit(1);
+        }
+        if (!objects.registry) {
+            console.log('ERROR: Registry not found.');
+            process.exit(1);
+        }
+
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function unpause --gas-budget 500000000`;
+        const systemDenyList = '0x403';
+        const args = `${systemDenyList} ${objects.denyCap} ${objects.registry}`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function unpause --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -496,10 +615,19 @@ class TokenInteractor {
             process.exit(1);
         }
 
+        const objects = await this.discoverTokenObjects();
+        
+        if (!objects.denyCap) {
+            console.log('ERROR: DenyCap not found.');
+            process.exit(1);
+        }
+
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function freeze --args ${this.config.address} --gas-budget 500000000`;
+        const systemDenyList = '0x403';
+        const args = `${systemDenyList} ${objects.denyCap} ${this.config.address} true`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function set_address_frozen --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
@@ -525,10 +653,19 @@ class TokenInteractor {
             process.exit(1);
         }
 
+        const objects = await this.discoverTokenObjects();
+        
+        if (!objects.denyCap) {
+            console.log('ERROR: DenyCap not found.');
+            process.exit(1);
+        }
+
         const { execSync } = require('child_process');
         const execOptions = this.getExecOptions();
         const moduleName = `${this.config.variant}_cmtat`;
-        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function unfreeze --args ${this.config.address} --gas-budget 500000000`;
+        const systemDenyList = '0x403';
+        const args = `${systemDenyList} ${objects.denyCap} ${this.config.address} false`;
+        const command = `iota client call --package ${this.config.packageId} --module ${moduleName} --function set_address_frozen --args ${args} --gas-budget 500000000`;
 
         try {
             const output = execSync(command, execOptions).toString();
