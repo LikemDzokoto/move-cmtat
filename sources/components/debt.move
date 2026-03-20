@@ -252,6 +252,21 @@ module move_cmtat::debt {
         }
     }
 
+    public fun delete_debt_state(state: DebtState) {
+        let DebtState {
+            id,
+            identifier: _,
+            instrument: _,
+            terms: _,
+            credit_events: _,
+            debt_engine: _,
+            use_external_engine: _,
+            debt_info_legacy: _,
+            credit_events_legacy: _,
+        } = state;
+        object::delete(id);
+    }
+
 
     public fun init_debt_identifier(): DebtIdentifier {
         DebtIdentifier {
@@ -343,6 +358,13 @@ module move_cmtat::debt {
     public fun get_sinking_fund_schedule(state: &DebtState): String { state.terms.sinking_fund_schedule }
     public fun get_convertible_terms(state: &DebtState): String { state.terms.convertible_terms }
     public fun get_collateral_description(state: &DebtState): String { state.terms.collateral_description }
+
+    public fun bond_terms_get_call_schedule(terms: &BondTerms): String { terms.call_schedule }
+    public fun bond_terms_get_put_schedule(terms: &BondTerms): String { terms.put_schedule }
+    public fun bond_terms_get_sinking_fund_schedule(terms: &BondTerms): String { terms.sinking_fund_schedule }
+    public fun bond_terms_get_convertible_terms(terms: &BondTerms): String { terms.convertible_terms }
+    public fun bond_terms_get_collateral_description(terms: &BondTerms): String { terms.collateral_description }
+
 
 
     

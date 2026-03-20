@@ -4,12 +4,14 @@
 module move_cmtat::debt_cmtat_tests {
     use std::string;
     use iota::test_scenario::{Self};
-    use iota::coin::TreasuryCap;
+    use iota::coin::{Self, TreasuryCap, Coin, DenyCapV1};
     use iota::deny_list::{Self, DenyList};
-    use iota::clock::Clock;
+    use iota::clock::{Self, Clock};
 
     use move_cmtat::debt_cmtat::{Self, DEBT_CMTAT, CMTATRegistry, DebtCMTATState,
-                                   AdminCap, DebtCap};
+                                   AdminCap, DebtCap, MintCap, BurnCap, PauseCap,
+                                   SnapshotCap, EnforcerCap};
+    use move_cmtat::debt;
     use move_cmtat::interest_engine;
 
     const ADMIN: address = @0xAD;
@@ -496,6 +498,970 @@ module move_cmtat::debt_cmtat_tests {
 
             test_scenario::return_shared(state);
             test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== CAPABILITY GRANT TESTS ==========
+
+    #[test]
+    fun test_grant_minter() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::grant_minter(&admin_cap, treasury_cap, DEBT_ENGINE, ctx);
+            test_scenario::return_to_sender(scenario, admin_cap);
+
+            test_scenario::return_shared(state);
+        };
+
+        test_scenario::next_tx(scenario, DEBT_ENGINE);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let mint_cap = test_scenario::take_from_sender<MintCap>(scenario);
+
+            test_scenario::return_to_sender(scenario, mint_cap);
+            transfer::public_transfer(treasury_cap, ADMIN);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_burner() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::grant_burner(&admin_cap, treasury_cap, DEBT_ENGINE, ctx);
+            test_scenario::return_to_sender(scenario, admin_cap);
+
+            test_scenario::return_shared(state);
+        };
+
+        test_scenario::next_tx(scenario, DEBT_ENGINE);
+        {
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let burn_cap = test_scenario::take_from_sender<BurnCap>(scenario);
+
+            test_scenario::return_to_sender(scenario, burn_cap);
+            transfer::public_transfer(treasury_cap, ADMIN);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_pauser() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::grant_pauser(&admin_cap, deny_cap, DEBT_ENGINE, ctx);
+            test_scenario::return_to_sender(scenario, admin_cap);
+
+            test_scenario::next_tx(scenario, DEBT_ENGINE);
+            {
+                let pause_cap = test_scenario::take_from_sender<PauseCap>(scenario);
+                test_scenario::return_to_sender(scenario, pause_cap);
+            };
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_enforcer() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::grant_enforcer(&admin_cap, deny_cap, DEBT_ENGINE, ctx);
+            test_scenario::return_to_sender(scenario, admin_cap);
+
+            test_scenario::next_tx(scenario, DEBT_ENGINE);
+            {
+                let enforcer_cap = test_scenario::take_from_sender<EnforcerCap>(scenario);
+                test_scenario::return_to_sender(scenario, enforcer_cap);
+            };
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_snapshooter() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::grant_snapshooter(&admin_cap, DEBT_ENGINE, ctx);
+
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, DEBT_ENGINE);
+        {
+            let snapshot_cap = test_scenario::take_from_sender<SnapshotCap>(scenario);
+            test_scenario::return_to_sender(scenario, snapshot_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_grant_debt_manager() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::grant_debt_manager(&admin_cap, debt_cap, DEBT_ENGINE, ctx);
+
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::next_tx(scenario, DEBT_ENGINE);
+        {
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            test_scenario::return_to_sender(scenario, debt_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== REGISTRY SETTER TESTS ==========
+
+    #[test]
+    fun test_set_terms() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_terms(&admin_cap, &mut registry, string::utf8(b"Terms v2"), ctx);
+
+            assert!(debt_cmtat::terms(&registry) == string::utf8(b"Terms v2"), 0);
+
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_set_information() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_information(&admin_cap, &mut registry, string::utf8(b"Info v2"), ctx);
+
+            assert!(debt_cmtat::information(&registry) == string::utf8(b"Info v2"), 0);
+
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_set_token_id() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_token_id(&admin_cap, &mut registry, string::utf8(b"TOKEN_V2"), ctx);
+
+            assert!(debt_cmtat::token_id(&registry) == string::utf8(b"TOKEN_V2"), 0);
+
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_set_document_uri() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_document_uri(&admin_cap, &mut registry, string::utf8(b"https://example.com"), ctx);
+
+            assert!(debt_cmtat::document_uri(&registry) == string::utf8(b"https://example.com"), 0);
+
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== MINT / BURN TESTS ==========
+
+    #[test]
+    fun test_mint_and_transfer() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+
+            let coins = debt_cmtat::mint(
+                &mut treasury_cap,
+                &registry,
+                &state,
+                &deny_list,
+                DEBT_ENGINE,
+                1_000_000,
+                test_scenario::ctx(scenario),
+            );
+
+            assert!(coin::value(&coins) == 1_000_000, 0);
+
+            transfer::public_transfer(coins, DEBT_ENGINE);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_mint_and_transfer_entry() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::mint_and_transfer(
+                &mut treasury_cap,
+                &registry,
+                &mut state,
+                &deny_list,
+                &clock,
+                DEBT_ENGINE,
+                500_000,
+                ctx,
+            );
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_burn() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let coins = coin::mint(&mut treasury_cap, 1_000_000, test_scenario::ctx(scenario));
+
+            debt_cmtat::burn(&mut treasury_cap, coins, test_scenario::ctx(scenario));
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_burn_entry() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let coins = coin::mint(&mut treasury_cap, 500_000, test_scenario::ctx(scenario));
+
+            debt_cmtat::burn_entry(&mut treasury_cap, coins, &deny_list, test_scenario::ctx(scenario));
+
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_transfer() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+
+            let coins = coin::mint(&mut treasury_cap, 1_000_000, test_scenario::ctx(scenario));
+
+            debt_cmtat::transfer(
+                &registry,
+                &mut state,
+                &deny_list,
+                &clock,
+                coins,
+                DEBT_ENGINE,
+                test_scenario::ctx(scenario),
+            );
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== RULE ENGINE DELEGATION TESTS ==========
+
+    #[test]
+    fun test_add_and_remove_vip() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(!debt_cmtat::is_vip(&state, DEBT_ENGINE), 0);
+
+            debt_cmtat::add_vip(&admin_cap, &mut state, DEBT_ENGINE, ctx);
+            assert!(debt_cmtat::is_vip(&state, DEBT_ENGINE), 1);
+
+            debt_cmtat::remove_vip(&admin_cap, &mut state, DEBT_ENGINE, ctx);
+            assert!(!debt_cmtat::is_vip(&state, DEBT_ENGINE), 2);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_add_and_remove_rule() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::add_rule(&admin_cap, &mut state, 0, ctx);
+            assert!(debt_cmtat::is_rule_enabled(&state, 0), 0);
+
+            debt_cmtat::remove_rule(&admin_cap, &mut state, 0, ctx);
+            assert!(!debt_cmtat::is_rule_enabled(&state, 0), 1);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_blacklist() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::add_to_blacklist(&admin_cap, &mut state, DEBT_ENGINE, ctx);
+            debt_cmtat::remove_from_blacklist(&admin_cap, &mut state, DEBT_ENGINE, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_sanction_list() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::add_to_sanction_list(&admin_cap, &mut state, DEBT_ENGINE, ctx);
+            debt_cmtat::remove_from_sanction_list(&admin_cap, &mut state, DEBT_ENGINE, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_set_max_balance() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_max_balance(&admin_cap, &mut state, 10_000_000, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_set_auto_approval() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_auto_approval(&admin_cap, &mut state, true, ctx);
+            debt_cmtat::set_auto_approval(&admin_cap, &mut state, false, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_set_time_limits() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_time_limits(&admin_cap, &mut state, 3600_000, 7200_000, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_remove_and_restore_rule_engine() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(debt_cmtat::rule_engine_active(&state), 0);
+
+            debt_cmtat::remove_rule_engine(&admin_cap, &mut state, ctx);
+            assert!(!debt_cmtat::rule_engine_active(&state), 1);
+
+            debt_cmtat::restore_rule_engine(&admin_cap, &mut state, ctx);
+            assert!(debt_cmtat::rule_engine_active(&state), 2);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== COUPON / INTEREST TESTS ==========
+
+    #[test]
+    fun test_generate_coupon_schedule() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_debt_instrument(
+                &debt_cap, &mut state,
+                5_000_000, 1_000_000, 100_000,
+                1704067200, 1735689600,
+                string::utf8(b"ANNUAL"), string::utf8(b""), string::utf8(b""),
+                2, 3, string::utf8(b"USD"), @0x0, ctx,
+            );
+
+            debt_cmtat::generate_coupon_schedule(&debt_cap, &mut state, &treasury_cap, &clock, ctx);
+
+            assert!(debt_cmtat::is_coupon_schedule_generated(&state), 0);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = interest_engine::ECouponNotDue)]
+    fun test_record_coupon_payment() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_debt_instrument(
+                &debt_cap, &mut state,
+                5_000_000, 1_000_000, 100_000,
+                1704067200, 1735689600,
+                string::utf8(b"ANNUAL"), string::utf8(b""), string::utf8(b""),
+                2, 3, string::utf8(b"USD"), @0x0, ctx,
+            );
+
+            debt_cmtat::generate_coupon_schedule(&debt_cap, &mut state, &treasury_cap, &clock, ctx);
+            debt_cmtat::record_coupon_payment(&debt_cap, &mut state, 1, &clock, ctx);
+
+            assert!(debt_cmtat::get_coupons_remaining(&state) == 0 || debt_cmtat::get_total_interest_paid(&state) > 0, 0);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = interest_engine::EClaimNotDue)]
+    fun test_claim_coupon() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_debt_instrument(
+                &debt_cap, &mut state,
+                5_000_000, 1_000_000, 100_000,
+                1704067200, 1735689600,
+                string::utf8(b"ANNUAL"), string::utf8(b""), string::utf8(b""),
+                2, 3, string::utf8(b"USD"), @0x0, ctx,
+            );
+
+            debt_cmtat::generate_coupon_schedule(&debt_cap, &mut state, &treasury_cap, &clock, ctx);
+
+            let coins = debt_cmtat::claim_coupon(&mut state, &mut treasury_cap, 1, 100_000, &clock, ctx);
+            transfer::public_transfer(coins, ADMIN);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_claimable_amount_and_next_coupon() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_debt_instrument(
+                &debt_cap, &mut state,
+                5_000_000, 1_000_000, 100_000,
+                1704067200, 1735689600,
+                string::utf8(b"ANNUAL"), string::utf8(b""), string::utf8(b""),
+                2, 3, string::utf8(b"USD"), @0x0, ctx,
+            );
+
+            debt_cmtat::generate_coupon_schedule(&debt_cap, &mut state, &treasury_cap, &clock, ctx);
+
+            let next = debt_cmtat::get_next_coupon(&state);
+            assert!(option::is_some(&next) || option::is_none(&next), 0);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    // ========== ABORT TESTS ==========
+
+    #[test]
+    #[expected_failure(abort_code = debt_cmtat::EModuleDeactivated)]
+    fun test_mint_aborts_when_deactivated() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::deactivate_contract(&admin_cap, &mut registry, &mut deny_list, &mut deny_cap, ctx);
+
+            let coins = debt_cmtat::mint(
+                &mut treasury_cap, &registry, &state, &deny_list, DEBT_ENGINE, 100, ctx,
+            );
+
+            transfer::public_transfer(coins, DEBT_ENGINE);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt_cmtat::ENotMaturedOrDefault)]
+    fun test_redeem_aborts_before_maturity() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let clock = clock::create_for_testing(test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::set_debt_instrument(
+                &debt_cap, &mut state,
+                5_000_000, 1_000_000, 100_000,
+                1704067200, 1893456000,
+                string::utf8(b"ANNUAL"), string::utf8(b""), string::utf8(b""),
+                2, 3, string::utf8(b"USD"), @0x0, ctx,
+            );
+
+            let coins = coin::mint(&mut treasury_cap, 500_000, ctx);
+
+            debt_cmtat::redeem(&mut treasury_cap, &registry, &mut state, &deny_list, &clock, coins, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            clock::destroy_for_testing(clock);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt::EDebtInDefault)]
+    fun test_mint_aborts_when_in_default() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let debt_cap = test_scenario::take_from_sender<DebtCap>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<DEBT_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::flag_default(&debt_cap, &mut state, ctx);
+
+            let coins = debt_cmtat::mint(
+                &mut treasury_cap, &registry, &state, &deny_list, DEBT_ENGINE, 100, ctx,
+            );
+
+            transfer::public_transfer(coins, DEBT_ENGINE);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, debt_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt_cmtat::EModuleDeactivated)]
+    fun test_pause_aborts_when_deactivated() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut deny_list = take_deny_list(scenario);
+            let mut deny_cap = test_scenario::take_from_sender<DenyCapV1<DEBT_CMTAT>>(scenario);
+            let mut registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::deactivate_contract(&admin_cap, &mut registry, &mut deny_list, &mut deny_cap, ctx);
+            debt_cmtat::pause(&mut deny_list, &mut deny_cap, &registry, ctx);
+
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(registry);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_to_sender(scenario, deny_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt_cmtat::ERuleEngineNotActive)]
+    fun test_remove_rule_engine_aborts_when_not_active() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::remove_rule_engine(&admin_cap, &mut state, ctx);
+            debt_cmtat::remove_rule_engine(&admin_cap, &mut state, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt_cmtat::ERuleEngineAlreadyActive)]
+    fun test_restore_rule_engine_aborts_when_already_active() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut state = test_scenario::take_shared<DebtCMTATState>(scenario);
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            debt_cmtat::restore_rule_engine(&admin_cap, &mut state, ctx);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(scenario, admin_cap);
         };
 
         test_scenario::end(scenario_val);

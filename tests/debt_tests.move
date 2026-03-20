@@ -120,10 +120,276 @@ module move_cmtat::debt_tests {
 
     #[test]
     fun test_identifier_setters() {
-        let  identifier = debt::init_debt_identifier();
+        let identifier = debt::init_debt_identifier();
 
-        // These test the struct field operations
         assert!(debt::identifier_get_issuer_name(&identifier) == string::utf8(b""), 0);
         assert!(debt::identifier_get_isin(&identifier) == string::utf8(b""), 1);
+    }
+
+    // ============ DEBT STATE CREATION TESTS ============
+
+    #[test]
+    fun test_init_debt_state() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let state = debt::init_debt_state(ctx);
+
+            assert!(debt::get_issuer_name(&state) == string::utf8(b""), 0);
+            assert!(debt::get_isin(&state) == string::utf8(b""), 1);
+            assert!(debt::get_interest_rate(&state) == 0, 2);
+            assert!(debt::get_par_value(&state) == 0, 3);
+            assert!(debt::get_maturity_date(&state) == 0, 4);
+            assert!(!debt::is_default_flagged(&state), 5);
+            assert!(!debt::is_default(&state), 6);
+            assert!(!debt::is_redeemed(&state), 7);
+            assert!(!debt::is_matured(&state), 8);
+            assert!(debt::get_debt_engine(&state) == @0x0, 9);
+            assert!(!debt::is_external_engine_enabled(&state), 10);
+            assert!(debt::get_debt(&state) == string::utf8(b""), 11);
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_init_debt_state_with_identifier() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let identifier = debt::create_debt_identifier(
+                string::utf8(b"Acme Corp"),
+                string::utf8(b"Corporate issuer"),
+                string::utf8(b""),
+                string::utf8(b"Trustee"),
+                string::utf8(b"US1234567890"),
+            );
+            let state = debt::init_debt_state_with_identifier(identifier, ctx);
+
+            assert!(debt::get_issuer_name(&state) == string::utf8(b"Acme Corp"), 0);
+            assert!(debt::get_isin(&state) == string::utf8(b"US1234567890"), 1);
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_init_debt_state_full() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let identifier = debt::create_debt_identifier(
+                string::utf8(b"Issuer"),
+                string::utf8(b""),
+                string::utf8(b""),
+                string::utf8(b""),
+                string::utf8(b"ISIN123"),
+            );
+            let instrument = debt::create_debt_instrument(
+                5_000_000,
+                1_000_000,
+                100_000,
+                1704067200,
+                1735689600,
+                string::utf8(b"ANNUAL"),
+                string::utf8(b""),
+                string::utf8(b""),
+                debt::u8_to_day_count(2),
+                debt::u8_to_business_day(3),
+                string::utf8(b"USD"),
+                @0x0,
+            );
+            let terms = debt::create_bond_terms(
+                string::utf8(b"Callable after 2025"),
+                string::utf8(b""),
+                string::utf8(b""),
+                string::utf8(b""),
+                string::utf8(b"Unsecured"),
+            );
+            let state = debt::init_debt_state_full(identifier, instrument, terms, ctx);
+
+            assert!(debt::get_issuer_name(&state) == string::utf8(b"Issuer"), 0);
+            assert!(debt::get_isin(&state) == string::utf8(b"ISIN123"), 1);
+            assert!(debt::get_interest_rate(&state) == 5_000_000, 2);
+            assert!(debt::get_par_value(&state) == 1_000_000, 3);
+            assert!(debt::get_maturity_date(&state) == 1735689600, 4);
+            assert!(debt::get_call_schedule(&state) == string::utf8(b"Callable after 2025"), 5);
+            assert!(debt::get_collateral_description(&state) == string::utf8(b"Unsecured"), 6);
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    // ============ STRUCT FACTORY TESTS ============
+
+    #[test]
+    fun test_create_debt_identifier() {
+        let id = debt::create_debt_identifier(
+            string::utf8(b"Acme Corp"),
+            string::utf8(b"Leading manufacturer"),
+            string::utf8(b"LEI123"),
+            string::utf8(b"Trustee Corp"),
+            string::utf8(b"US1234567890"),
+        );
+
+        assert!(debt::identifier_get_issuer_name(&id) == string::utf8(b"Acme Corp"), 0);
+        assert!(debt::identifier_get_isin(&id) == string::utf8(b"US1234567890"), 1);
+    }
+
+    #[test]
+    fun test_create_debt_instrument() {
+        let inst = debt::create_debt_instrument(
+            5_250_000,
+            1_000_000,
+            100_000,
+            1704067200,
+            1735689600,
+            string::utf8(b"SEMI_ANNUAL"),
+            string::utf8(b"Format B"),
+            string::utf8(b"Jan 1/Jul 1"),
+            debt::u8_to_day_count(0),
+            debt::u8_to_business_day(1),
+            string::utf8(b"EUR"),
+            @0xDE,
+        );
+
+        assert!(debt::instrument_get_interest_rate(&inst) == 5_250_000, 0);
+        assert!(debt::instrument_get_par_value(&inst) == 1_000_000, 1);
+        assert!(debt::instrument_get_maturity_date(&inst) == 1735689600, 2);
+    }
+
+    #[test]
+    fun test_create_credit_events() {
+        let events = debt::create_credit_events(
+            true,
+            false,
+            false,
+            string::utf8(b"AA+"),
+            250_000,
+            1735689600,
+        );
+
+        assert!(debt::credit_events_is_default(&events), 0);
+        assert!(!debt::credit_events_is_redeemed(&events), 1);
+        assert!(!debt::credit_events_is_matured(&events), 2);
+        assert!(debt::credit_events_get_rating(&events) == string::utf8(b"AA+"), 3);
+        assert!(debt::credit_events_get_principal_distributed(&events) == 250_000, 4);
+        assert!(debt::credit_events_get_next_coupon_date(&events) == 1735689600, 5);
+    }
+
+    #[test]
+    fun test_create_bond_terms() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            let events = debt::get_credit_events(&state);
+            assert!(!debt::credit_events_is_default(&events), 0);
+            assert!(!debt::credit_events_is_redeemed(&events), 1);
+            assert!(!debt::credit_events_is_matured(&events), 2);
+            assert!(debt::credit_events_get_rating(&events) == string::utf8(b""), 3);
+            assert!(debt::credit_events_get_principal_distributed(&events) == 0, 4);
+            assert!(debt::credit_events_get_next_coupon_date(&events) == 0, 5);
+
+            debt::flag_default(&mut state);
+            let ev2 = debt::get_credit_events(&state);
+            assert!(debt::credit_events_is_default(&ev2), 6);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_identifier_accessors() {
+        let id = debt::create_debt_identifier(
+            string::utf8(b"BigCorp"),
+            string::utf8(b"Corporate issuer"),
+            string::utf8(b"BigCorp Guarantee"),
+            string::utf8(b"Trustee Co"),
+            string::utf8(b"US9876543210"),
+        );
+        assert!(debt::identifier_get_issuer_name(&id) == string::utf8(b"BigCorp"), 0);
+        assert!(debt::identifier_get_isin(&id) == string::utf8(b"US9876543210"), 1);
+    }
+
+    #[test]
+    fun test_instrument_accessors() {
+        let inst = debt::create_debt_instrument(
+            4_000_000,
+            500_000,
+            50_000,
+            1704067200,
+            1767225600,
+            string::utf8(b"QUARTERLY"),
+            string::utf8(b"Format"),
+            string::utf8(b"Payment"),
+            debt::u8_to_day_count(2),
+            debt::u8_to_business_day(0),
+            string::utf8(b"EUR"),
+            @0xCC,
+        );
+        assert!(debt::instrument_get_interest_rate(&inst) == 4_000_000, 0);
+        assert!(debt::instrument_get_maturity_date(&inst) == 1767225600, 1);
+        assert!(debt::instrument_get_par_value(&inst) == 500_000, 2);
+    }
+
+    #[test]
+    fun test_credit_events_operations() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            let events = debt::get_credit_events(&state);
+            assert!(!debt::credit_events_is_default(&events), 0);
+            assert!(!debt::credit_events_is_redeemed(&events), 1);
+            assert!(!debt::credit_events_is_matured(&events), 2);
+            assert!(debt::credit_events_get_rating(&events) == string::utf8(b""), 3);
+            assert!(debt::credit_events_get_principal_distributed(&events) == 0, 4);
+            assert!(debt::credit_events_get_next_coupon_date(&events) == 0, 5);
+
+            debt::flag_redeemed(&mut state);
+            assert!(debt::is_redeemed(&state), 6);
+
+            debt::clear_default(&mut state);
+            debt::flag_default(&mut state);
+            assert!(debt::is_default(&state), 7);
+
+            debt::flag_matured(&mut state);
+            assert!(debt::is_matured(&state), 8);
+
+            debt::set_rating(&mut state, string::utf8(b"A+"));
+            assert!(debt::get_rating(&state) == string::utf8(b"A+"), 9);
+
+            debt::record_principal_distribution(&mut state, 250_000);
+            assert!(debt::get_principal_distributed(&state) == 250_000, 10);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_credit_events() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let state = debt::init_debt_state(ctx);
+
+            let events = debt::get_credit_events(&state);
+            assert!(debt::credit_events_is_default(&events) == false, 0);
+            assert!(debt::credit_events_is_redeemed(&events) == false, 1);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
     }
 }
