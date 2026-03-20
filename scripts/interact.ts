@@ -1070,7 +1070,7 @@ class TokenInteractor {
         console.log('\n📋 Step 3: Transfer coupon payments to holders...');
         for (const alloc of allocations) {
             try {
-                this.config.recipient = alloc.address;
+                this.config.recipient = alloc.address;  
                 this.config.amount = alloc.amount;
                 await this.transfer();
                 await this.delay(delayMs);
@@ -1137,18 +1137,25 @@ class TokenInteractor {
             process.exit(1);
         }
         
-        console.log('\n📋 Step 3: Record redemption (CLI requires Coin objects for actual burn)...');
-        console.log('   ℹ️  Note: Actual token burn requires Coin object manipulation via SDK');
-        console.log('   The following redemptions are recorded:');
+        console.log('\n📋 Step 3: Burn tokens (redeem)...');
         for (const redeem of redemptions) {
-            console.log(`   - Address: ${redeem.address}, Amount: ${redeem.amount}`);
+            try {
+                this.config.amount = redeem.amount;
+                await this.burnDebtTokens();
+                await this.delay(delayMs);
+                console.log(`   ✅ Redeemed (burned) ${redeem.amount} tokens`);
+            } catch (e: any) {
+                errors.push(`Failed to redeem ${redeem.amount}: ${e.message}`);
+            }
         }
-        console.log('\n   To complete burn manually:');
-        console.log('   1. List your Coin objects: iota client objects <address> --json');
-        console.log('   2. Split the coin: iota client pay-iota --recipients <addr> --amounts <amt> --input-coins <coin_id>');
-        console.log('   3. Call burn: iota client call --package <pkg> --module debt_cmtat --function burn_entry --args <treasury_cap> <split_coin_id> <deny_list>');
         
-        console.log('\n✅ FLOW REDEEM COMPLETED (Atomic SUCCESS - redemption recorded)');
+        if (errors.length > 0) {
+            console.log('\n❌ FLOW FAILED (Atomic)');
+            errors.forEach(e => console.log(`   - ${e}`));
+            process.exit(1);
+        }
+        
+        console.log('\n✅ FLOW REDEEM COMPLETED (Atomic SUCCESS)');
     }
 
     private async flowEmergency(): Promise<void> {
