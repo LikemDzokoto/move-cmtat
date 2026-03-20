@@ -362,9 +362,11 @@ Freeze and pause changes are epoch-scoped, meaning they take effect in the curre
 
 ---
 
-## Deployment Scripts
+## Deployment & Orchestration Scripts
 
-This project includes automation scripts for deployment and interaction:
+This project includes comprehensive automation scripts for deployment and end-to-end token lifecycle management.
+
+### Script Overview
 
 | Script | Purpose |
 |--------|---------|
@@ -372,15 +374,115 @@ This project includes automation scripts for deployment and interaction:
 | `scripts/localnet.sh` | Start local IOTA network with `--watch` mode for auto-restart |
 | `scripts/deploy.ts` | Deploy all 4 CMTAT variants to any network |
 | `scripts/verify.ts` | Verify deployed contracts on-chain + explorer |
-| `scripts/interact.ts` | Token operations (mint, burn, transfer, pause, freeze, roles) |
+| `scripts/interact.ts` | Token operations + 7 orchestrated flows |
+| `scripts/CoinHelper.ts` | SDK-based coin operations (split, merge, burn) |
+| `scripts/TokenHelper.ts` | SDK-based token operations (transfer, conditional transfers) |
 
 **Key Features:**
 - Uses CLI's active address (no keypair generation required)
 - Automatic faucet funding check for testnet deployments
 - Proper gas budgets (1B for publish, 500M for function calls)
-- Timeout handling for testnet instability
+- SDK helpers for complex operations requiring Coin object manipulation
 
+### 7-Step Orchestrated Flows
 
+The interaction framework implements complete token lifecycle management:
+
+| Flow | Action | Type | Description |
+|------|--------|-------|-------------|
+| **FLOW 1** | `flow_setup` | Atomic | Token setup: terms, documents, RuleEngine, DebtEngine, roles |
+| **FLOW 2** | `flow_onboard` | Continue | Investor onboarding: allowlist, KYC, jurisdiction rules |
+| **FLOW 3** | `flow_issue` | Continue | Primary issuance: batch mint with validation + snapshot |
+| **FLOW 4** | `flow_transfer` | Continue | Secondary transfer: direct or conditional mode |
+| **FLOW 5** | `flow_coupon` | Continue | Coupon/interest payment: debt schedule + on-chain payment |
+| **FLOW 6** | `flow_redeem` | Atomic | Token redemption: maturity check + atomic burn |
+| **FLOW 7** | `flow_emergency` | Atomic | Emergency controls: pause, freeze, unfreeze |
+
+### Flow Parameters
+
+```bash
+# Token Metadata
+--terms <text>                    # Legal terms
+--document-uri <uri>              # Document URI
+--document-hash <hash>            # Document hash (URI#hash)
+--documents <json>                # Document list
+
+# RuleEngine Configuration
+--rule-engine-rules <json>        # Rules: whitelist, blacklist, sanctions
+--kyc-addresses <addrs>          # KYC-approved addresses
+--jurisdiction-rules <json>       # Jurisdiction rules
+--lockup-rules <json>             # Lockup rules
+--max-balance <n>                 # Max balance per address
+--auto-approve <bool>              # Auto-approve conditional transfers
+
+# Debt Configuration
+--debt-terms <json>               # Debt terms
+--coupon-number <n>               # Coupon period
+--coupon-payments <json>          # Coupon payments
+
+# Operations
+--allocations <json>              # Allocations [{address, amount}, ...]
+--allowlist-addresses <addrs>    # Allowlist addresses
+--snapshot-after                 # Take snapshot after minting
+--continue-on-error              # Continue on error
+--delay-ms <ms>                  # Delay between operations
+
+# Transfer
+--transfer-mode <mode>           # direct|conditional
+
+# Emergency
+--emergency-action <action>       # pause|unpause|freeze|unfreeze
+--freeze-addresses <addrs>       # Addresses for freeze
+```
+
+### Flow Examples
+
+```bash
+# FLOW 1: Setup token with metadata and roles
+node dist/interact.js --package-id 0x40f7... --variant standard \
+  --action flow_setup \
+  --terms "TokenTerms:v1.0" \
+  --document-uri "https://docs.example.com/prospectus.pdf" \
+  --document-hash "sha256:abc123" \
+  --rule-engine-rules '[{"type":"whitelist","addresses":["0x123..."]}]' \
+  --max-balance 1000000 \
+  --allowlist-addresses 0x456...,0x789...
+
+# FLOW 2: Onboard investors
+node dist/interact.js --package-id 0x40f7... --variant allowlist \
+  --action flow_onboard --continue-on-error \
+  --allowlist-addresses 0x123...,0x456... \
+  --jurisdiction-rules '[{"address":"0x123","jurisdiction":"US"}]'
+
+# FLOW 3: Primary issuance with snapshot
+node dist/interact.js --package-id 0x40f7... --action flow_issue \
+  --allocations '[{"address":"0x123","amount":1000},{"address":"0x456","amount":2000}]' \
+  --snapshot-after --delay-ms 1000
+
+# FLOW 4: Secondary transfer (direct or conditional)
+node dist/interact.js --package-id 0x40f7... --action flow_transfer \
+  --recipient 0x456 --amount 500 --transfer-mode direct
+
+# FLOW 5: Coupon payment
+node dist/interact.js --package-id 0x40f7... --variant debt \
+  --action flow_coupon --coupon-number 1 \
+  --coupon-payments '[{"address":"0x123","amount":50}]'
+
+# FLOW 6: Redemption
+node dist/interact.js --package-id 0x40f7... --variant debt \
+  --action flow_redeem \
+  --allocations '[{"address":"0x123","amount":1000}]'
+
+# FLOW 7: Emergency controls
+node dist/interact.js --package-id 0x40f7... --action flow_emergency \
+  --emergency-action pause
+
+# Documents
+node dist/interact.js --package-id 0x40f7... --action flow_documents \
+  --documents '[{"name":"prospectus","uri":"https://docs.ex.com/prospectus.pdf","hash":"sha256:xyz"}]'
+```
+
+Run `node dist/interact.js --help` for complete documentation.
 
 ### Deployment Steps
 
@@ -406,60 +508,12 @@ iota move build
 
 #### 4. Deploy All Variants
 
-**Option A: With Build**
 ```bash
-./node_modules/.bin/tsc scripts/deploy.ts --outDir ./dist --esModuleInterop --module commonjs --target es2020 --skipLibCheck
+npm run build
 /usr/bin/node dist/deploy.js
 ```
 
-**Option B: Skip Build (if already built)**
-```bash
-/usr/bin/node dist/deploy.js --skip-build
-```
-
 #### 5. Verify Deployment
-
-```bash
-ts-node scripts/verify.ts --package-id <PACKAGE_ID> --network testnet
-```
-
-#### 6. Interact with Tokens
-
-```bash
-# Mint tokens
-ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action mint --amount 1000 --recipient <ADDRESS>
-
-# Check balance
-ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action balance --address <ADDRESS>
-
-# Pause transfers
-ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action pause
-
-# Freeze address
-ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action freeze --address <ADDRESS>
-
-# Grant role
-ts-node scripts/interact.ts --package-id <PACKAGE_ID> --action grant_role --address <ADDRESS> --role minter
-```
-
-Run `ts-node scripts/interact.ts --help` for all available actions.
-
-### Source Code Verification
-
-Verify that deployed bytecode matches your local source code using the IOTA CLI:
-
-#### Step 1: Record Package Address
-
-```bash
-iota move manage-package \
-  --environment testnet \
-  --network-id 2304aa97 \
-  --original-id <PACKAGE_ID> \
-  --latest-id <PACKAGE_ID> \
-  --version-number 1
-```
-
-#### Step 2: Verify Source Code
 
 ```bash
 iota client verify-source .
@@ -467,7 +521,20 @@ iota client verify-source .
 
 Expected output: `Source verification succeeded!`
 
-This cryptographically proves the deployed contract matches your source code.
+#### 6. Interact with Tokens
+
+```bash
+# Use individual actions
+node dist/interact.js --package-id <PACKAGE_ID> --action mint --amount 1000 --recipient <ADDRESS>
+node dist/interact.js --package-id <PACKAGE_ID> --action balance --address <ADDRESS>
+node dist/interact.js --package-id <PACKAGE_ID> --action pause
+
+# Or use orchestrated flows
+node dist/interact.js --package-id <PACKAGE_ID> --action flow_setup --terms "TokenTerms:v1" ...
+node dist/interact.js --package-id <PACKAGE_ID> --action flow_issue --allocations '[...]' ...
+```
+
+Run `node dist/interact.js --help` for complete documentation.
 
 ### Network Configuration
 
