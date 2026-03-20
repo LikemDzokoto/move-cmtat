@@ -142,10 +142,18 @@ move-cmtat/
 │   │   ├── interest_engine.move   # Coupon & interest calc
 │   │   └── debt_engine.move       # Debt management
 │   │
-│   ├── components/             # State components
-│   │   ├── allowlist.move      # Whitelist functionality 
-│   │   ├── debt.move           # Debt instrument data
-│   │
+│   └── components/             # State components
+│       ├── allowlist.move      # Whitelist functionality 
+│       └── debt.move           # Debt instrument data
+│
+├── scripts/                    # Deployment & orchestration scripts
+│   ├── setup.sh               # Environment setup
+│   ├── localnet.sh            # Local network launcher
+│   ├── deploy.ts              # Deploy all 4 CMTAT variants
+│   ├── verify.ts              # Verify deployed contracts
+│   ├── interact.ts            # Token operations + 7 orchestrated flows
+│   ├── CoinHelper.ts          # SDK-based coin operations
+│   └── TokenHelper.ts         # SDK-based token operations
 │
 ├── tests/                      # Comprehensive test suite
 │   ├── rule_engine_v2_tests.move
@@ -159,6 +167,7 @@ move-cmtat/
 │   ├── capability_tests.move        # Role/capability tests
 │   └── integration_tests.move       # Cross-contract flow tests
 │
+├── package.json              
 └── CHANGELOG.md                # Version history and release notes
 ```
 
