@@ -392,4 +392,304 @@ module move_cmtat::debt_tests {
         };
         test_scenario::end(scenario_val);
     }
+
+    // ============ VALIDATION & MATH TESTS ============
+
+    #[test]
+    fun test_is_matured_at_time_zero_maturity() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+            debt::set_maturity_date(&mut state, 0);
+
+            assert!(!debt::is_matured_at_time(1700000000, &state), 0);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_is_matured_at_time_matured() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+            debt::set_maturity_date(&mut state, 1700000000);
+
+            assert!(debt::is_matured_at_time(1700000000, &state), 0);
+            assert!(debt::is_matured_at_time(1800000000, &state), 1);
+            assert!(!debt::is_matured_at_time(1600000000, &state), 2);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_is_redemption_allowed() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+            debt::set_maturity_date(&mut state, 1700000000);
+
+            assert!(debt::is_redemption_allowed(1700000000, &state), 0);
+
+            debt::flag_redeemed(&mut state);
+            assert!(!debt::is_redemption_allowed(1700000000, &state), 1);
+
+            debt::clear_default(&mut state);
+            debt::flag_redeemed(&mut state);
+            debt::set_maturity_date(&mut state, 0);
+            assert!(!debt::is_redemption_allowed(1700000000, &state), 2);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_is_fully_redeemed() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            assert!(!debt::is_fully_redeemed(&state), 0);
+
+            debt::flag_redeemed(&mut state);
+            assert!(debt::is_fully_redeemed(&state), 1);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_time_to_maturity() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+            debt::set_maturity_date(&mut state, 1700000000);
+
+            assert!(debt::time_to_maturity(1600000000, &state) == 100000000, 0);
+            assert!(debt::time_to_maturity(1700000000, &state) == 0, 1);
+            assert!(debt::time_to_maturity(1800000000, &state) == 0, 2);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_check_and_update_maturity() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            assert!(!debt::is_matured(&state), 0);
+
+            debt::check_and_update_maturity(&mut state, 0);
+            assert!(!debt::is_matured(&state), 1);
+
+            debt::set_maturity_date(&mut state, 1700000000);
+            debt::check_and_update_maturity(&mut state, 1700000000);
+            assert!(debt::is_matured(&state), 2);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_validate_redemption_amount() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            debt::set_minimum_denomination(&mut state, 0);
+            assert!(debt::validate_redemption_amount(&state, 100), 0);
+
+            debt::set_minimum_denomination(&mut state, 100);
+            assert!(debt::validate_redemption_amount(&state, 300), 1);
+            assert!(!debt::validate_redemption_amount(&state, 150), 2);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_calculate_simple_interest() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let state = debt::init_debt_state(ctx);
+
+            assert!(debt::calculate_simple_interest(0, 5000000, 365, 365) == 0, 0);
+            assert!(debt::calculate_simple_interest(1000000, 0, 365, 365) == 0, 1);
+            assert!(debt::calculate_simple_interest(1000000, 5000000, 0, 365) == 0, 2);
+            assert!(debt::calculate_simple_interest(1000000, 5000000, 365, 365) > 0, 3);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_rate_conversions() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let state = debt::init_debt_state(ctx);
+
+            assert!(debt::rate_to_percentage(5_000_000) == 500, 0);
+            assert!(debt::rate_to_percentage(0) == 0, 1);
+
+            assert!(debt::percentage_to_rate(5) == 50_000, 2);
+            assert!(debt::percentage_to_rate(0) == 0, 3);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_days_in_year() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let state = debt::init_debt_state(ctx);
+
+            assert!(debt::days_in_year(&debt::u8_to_day_count(0)) == 360, 0);
+            assert!(debt::days_in_year(&debt::u8_to_day_count(1)) == 360, 1);
+            assert!(debt::days_in_year(&debt::u8_to_day_count(2)) == 365, 2);
+            assert!(debt::days_in_year(&debt::u8_to_day_count(3)) == 365, 3);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt::EDebtInDefault)]
+    fun test_require_not_in_default_aborts() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            debt::flag_default(&mut state);
+            debt::require_not_in_default(&state);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = debt::EAlreadyRedeemed)]
+    fun test_require_not_redeemed_aborts() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            debt::flag_redeemed(&mut state);
+            debt::require_not_redeemed(&state);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    // ============ REMAINING GETTER TESTS ============
+
+    #[test]
+    fun test_identifier_remaining_getters() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            debt::set_issuer_description(&mut state, string::utf8(b"Issuer description"));
+            debt::set_guarantor(&mut state, string::utf8(b"LEI123456"));
+            debt::set_debt_holder_representative(&mut state, string::utf8(b"Trustee Corp"));
+
+            assert!(debt::get_issuer_description(&state) == string::utf8(b"Issuer description"), 0);
+            assert!(debt::get_guarantor(&state) == string::utf8(b"LEI123456"), 1);
+            assert!(debt::get_debt_holder_representative(&state) == string::utf8(b"Trustee Corp"), 2);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_instrument_remaining_getters() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            debt::set_minimum_denomination(&mut state, 100000);
+            debt::set_issuance_date(&mut state, 1704067200);
+            debt::set_coupon_frequency(&mut state, string::utf8(b"QUARTERLY"));
+            debt::set_interest_schedule_format(&mut state, string::utf8(b"Schedule A"));
+            debt::set_interest_payment_date(&mut state, string::utf8(b"Jan 1"));
+            debt::set_currency(&mut state, string::utf8(b"EUR"));
+            debt::set_currency_contract(&mut state, @0xDE);
+            debt::set_business_day_convention(&mut state, debt::u8_to_business_day(1));
+
+            assert!(debt::get_minimum_denomination(&state) == 100000, 0);
+            assert!(debt::get_issuance_date(&state) == 1704067200, 1);
+            assert!(debt::get_coupon_frequency(&state) == string::utf8(b"QUARTERLY"), 2);
+            assert!(debt::get_interest_schedule_format(&state) == string::utf8(b"Schedule A"), 3);
+            assert!(debt::get_interest_payment_date(&state) == string::utf8(b"Jan 1"), 4);
+            assert!(debt::get_currency(&state) == string::utf8(b"EUR"), 5);
+            assert!(debt::get_currency_contract(&state) == @0xDE, 6);
+            assert!(debt::business_day_to_u8(&debt::get_business_day_convention(&state)) == 1, 7);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_bond_terms_remaining_getters() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let mut state = debt::init_debt_state(ctx);
+
+            debt::set_sinking_fund_schedule(&mut state, string::utf8(b"Annual 5%"));
+            debt::set_convertible_terms(&mut state, string::utf8(b"Convertible at 1.2x"));
+
+            assert!(debt::get_sinking_fund_schedule(&state) == string::utf8(b"Annual 5%"), 0);
+            assert!(debt::get_convertible_terms(&state) == string::utf8(b"Convertible at 1.2x"), 1);
+
+            debt::delete_debt_state(state);
+        };
+        test_scenario::end(scenario_val);
+    }
 }

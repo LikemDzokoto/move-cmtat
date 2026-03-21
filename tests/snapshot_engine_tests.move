@@ -482,4 +482,356 @@ module move_cmtat::snapshot_engine_tests {
 
         test_scenario::end(scenario_val);
     }
+
+    // ============ TIME-BASED & UPDATE TESTS ============
+
+    #[test]
+    fun test_get_snapshot_accounts() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            let accounts = snapshot_engine::get_snapshot_accounts(&engine, snapshot_id);
+            assert!(vector::length(&accounts) == 0, 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_snapshot_full() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            let _snap = snapshot_engine::get_snapshot_full(&engine, snapshot_id);
+            let (id, ts, supply) = snapshot_engine::get_snapshot(&engine, snapshot_id);
+            assert!(id == 0 && ts == 1704067200 && supply == 1000000, 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_find_snapshot_at_time() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+            snapshot_engine::create_snapshot(&mut engine, 1000000, 1706745600, ctx);
+
+            let found = snapshot_engine::find_snapshot_at_time(&engine, 1705000000);
+            assert!(option::is_some(&found), 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_find_snapshot_at_time_no_match() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            let found = snapshot_engine::find_snapshot_at_time(&engine, 1600000000);
+            assert!(option::is_none(&found), 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_snapshots_in_range() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+            snapshot_engine::create_snapshot(&mut engine, 1000000, 1706745600, ctx);
+            snapshot_engine::create_snapshot(&mut engine, 1000000, 1709424000, ctx);
+
+            let in_range = snapshot_engine::get_snapshots_in_range(&engine, 1705000000, 1709000000);
+            assert!(vector::length(&in_range) >= 1, 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_update_snapshot_description() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            snapshot_engine::update_snapshot_description(&mut engine, snapshot_id, b"Updated description");
+
+            let _snap = snapshot_engine::get_snapshot_full(&engine, snapshot_id);
+            let (_, _, _) = snapshot_engine::get_snapshot(&engine, snapshot_id);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_update_snapshot_block_number() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            snapshot_engine::update_snapshot_block_number(&mut engine, snapshot_id, 123456);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_batch_record_balances() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            let accounts = vector[USER1, USER2, USER3];
+            let balances = vector[250000u64, 350000, 400000];
+            snapshot_engine::batch_record_balances(&mut engine, snapshot_id, accounts, balances, ctx);
+
+            assert!(snapshot_engine::get_balance_at_snapshot(&engine, snapshot_id, USER1) == 250000, 0);
+            assert!(snapshot_engine::get_balance_at_snapshot(&engine, snapshot_id, USER2) == 350000, 1);
+            assert!(snapshot_engine::get_balance_at_snapshot(&engine, snapshot_id, USER3) == 400000, 2);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = snapshot_engine::EAccountNotFound)]
+    fun test_require_account_has_balance_aborts() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+            snapshot_engine::record_balance_at_snapshot(&mut engine, snapshot_id, USER1, 500000, ctx);
+
+            snapshot_engine::require_account_has_balance(&engine, snapshot_id, USER2);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_is_snapshot_completed() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            assert!(!snapshot_engine::is_snapshot_completed(&engine, 999), 0);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+            assert!(!snapshot_engine::is_snapshot_completed(&engine, snapshot_id), 1);
+
+            snapshot_engine::mark_snapshot_complete(&mut engine, snapshot_id);
+            assert!(snapshot_engine::is_snapshot_completed(&engine, snapshot_id), 2);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_calculate_proportional_share_zero_balance() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            let share = snapshot_engine::calculate_proportional_share(&engine, snapshot_id, USER1, 1000000);
+            assert!(share == 0, 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_get_snapshot_timestamp() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let ctx = test_scenario::ctx(scenario);
+            let engine = snapshot_engine::init_snapshot_engine(ctx);
+            transfer::public_share_object(engine);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut engine = test_scenario::take_shared<SnapshotEngine>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            let snapshot_id = snapshot_engine::create_snapshot(&mut engine, 1000000, 1704067200, ctx);
+
+            let ts = snapshot_engine::get_snapshot_timestamp(&engine, snapshot_id);
+            assert!(ts == 1704067200, 0);
+
+            test_scenario::return_shared(engine);
+        };
+
+        test_scenario::end(scenario_val);
+    }
 }
