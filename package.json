@@ -1,0 +1,17 @@
+{
+  "name": "move-cmtat",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "interact": "node dist/interact.js"
+  },
+  "dependencies": {
+    "@iota/iota-sdk": "1.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}

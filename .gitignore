@@ -1,7 +1,6 @@
 # Build artifacts
 build/
 *.mv
-*.json
 
 # Move language files
 .move/
