@@ -866,4 +866,72 @@ module move_cmtat::allowlist_cmtat_tests_new {
 
         test_scenario::end(scenario_val);
     }
+    
+    
+
+ 
+
+    #[test]
+    fun test_mint_and_transfer_when_allowlisted() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup_with_clock(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let allowlist_cap = test_scenario::take_from_sender<AllowlistCap>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::enable_allowlist(&allowlist_cap, &mut compliance_state, true, ctx);
+
+            let ctx = test_scenario::ctx(scenario);
+            allowlist_cmtat::set_address_allowlist(&allowlist_cap, &mut compliance_state, USER2, true, ctx);
+
+            test_scenario::return_to_sender(scenario, allowlist_cap);
+            test_scenario::return_shared(compliance_state);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let minter_cap = test_scenario::take_from_sender<MintCap>(scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<ALLOWLIST_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut state = test_scenario::take_shared<AllowlistCMTATState>(scenario);
+            let compliance_state = test_scenario::take_shared<ComplianceState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let clock = test_scenario::take_shared<clock::Clock>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            allowlist_cmtat::mint_and_transfer(
+                &mut treasury_cap,
+                &registry,
+                &mut state,
+                &compliance_state,
+                &deny_list,
+                &clock,
+                USER2,
+                5000,
+                ctx
+            );
+
+            test_scenario::return_to_sender(scenario, minter_cap);
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(compliance_state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::next_tx(scenario, USER2);
+        {
+            let coins = test_scenario::take_from_sender<coin::Coin<ALLOWLIST_CMTAT>>(scenario);
+            assert!(coin::value(&coins) == 5000, 0);
+            transfer::public_transfer(coins, ADMIN);
+        };
+
+        test_scenario::end(scenario_val);
+    }
 }

@@ -398,4 +398,82 @@ module move_cmtat::standard_cmtat_tests {
 
         test_scenario::end(scenario_val);
     }
+
+
+    #[test]
+    fun test_mint_and_transfer_happy_path() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
+            let mut state = test_scenario::take_shared<StandardCMTATState>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            standard_cmtat::add_vip(&admin_cap, &mut state, USER1, ctx);
+
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_shared(state);
+        };
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<STANDARD_CMTAT>>(scenario);
+            let registry = test_scenario::take_shared<CMTATRegistry>(scenario);
+            let mut state = test_scenario::take_shared<StandardCMTATState>(scenario);
+            let deny_list = take_deny_list(scenario);
+            let clock = take_clock(scenario);
+            let ctx = test_scenario::ctx(scenario);
+
+            standard_cmtat::mint_and_transfer(
+                &mut treasury_cap,
+                &registry,
+                &mut state,
+                &deny_list,
+                &clock,
+                USER1,
+                5000,
+                ctx
+            );
+
+            test_scenario::return_to_sender(scenario, treasury_cap);
+            test_scenario::return_shared(registry);
+            test_scenario::return_shared(state);
+            test_scenario::return_shared(deny_list);
+            test_scenario::return_shared(clock);
+        };
+
+        test_scenario::next_tx(scenario, USER1);
+        {
+            let coins = test_scenario::take_from_sender<Coin<STANDARD_CMTAT>>(scenario);
+            assert!(coin::value(&coins) == 5000, 0);
+            transfer::public_transfer(coins, ADMIN);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_message_for_restriction_code() {
+        let mut scenario_val = test_scenario::begin(ADMIN);
+        let scenario = &mut scenario_val;
+
+        setup(scenario);
+
+        test_scenario::next_tx(scenario, ADMIN);
+        {
+            let deny_list = take_deny_list(scenario);
+            let _ctx = test_scenario::ctx(scenario);
+
+            let msg = rule_engine_v2::message_for_restriction_code(0);
+            assert!(string::length(&msg) > 0, 0);
+
+            test_scenario::return_shared(deny_list);
+        };
+
+        test_scenario::end(scenario_val);
+    }
 }
